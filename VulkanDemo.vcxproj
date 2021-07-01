@@ -115,11 +115,14 @@
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="heap.c" />
     <ClCompile Include="log.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="renderer.c" />
     <ClCompile Include="window.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="heap.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="renderer.h" />
     <ClInclude Include="window.h" />

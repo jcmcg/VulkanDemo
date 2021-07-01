@@ -8,6 +8,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
   window_t window = { hInstance };
   window.width = 1024;
   window.height = 768;
+  window.on_create = init_vulkan;
+  window.on_destroy = cleanup_vulkan;
 
   if (create_window(&window) == WE_OK) {
     MSG msg = { 0 };

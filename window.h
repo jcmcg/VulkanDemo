@@ -17,6 +17,8 @@ typedef struct window_s {
   bool active;
   WORD width;
   WORD height;
+  void (*on_create)();
+  void (*on_destroy)();
 } window_t;
 
 WIN_ERROR create_window(window_t *);
