@@ -33,6 +33,26 @@ void log_vk_error(const char *file, long line, const char *function, VkResult er
   log_console_error("VULKAN ERROR: '%s', line %ld, '%s' - VkResult: %d", file, line, function, error);
 }
 
+VkBool32 VKAPI_CALL debug_messenger_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                             VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+                                             const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                                             void *pUserData) {
+  switch (messageSeverity) {
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+      log_console_error(pCallbackData->pMessage);
+      break;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+      log_console_warning(pCallbackData->pMessage);
+      break;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+    default:
+      log_console_info(pCallbackData->pMessage);
+      break;
+  }
+  return VK_FALSE;
+}
+
 VULKAN_ERROR enum_validation_layers() {
   LOG_DEBUG_INFO("enum_validation_layers()");
   uint32_t num_layers = 0, i, j;
@@ -76,6 +96,63 @@ VULKAN_ERROR enum_instance_extensions() {
   return ve;
 }
 
+void push_create(void (*create)(), void (*destroy)()) {
+  cds_entry_t *cs_entry = halloc_type(cds_entry_t, 1);
+  cs_entry->destroy = destroy;
+  cs_entry->next = vk_env.cd_stack;
+  vk_env.cd_stack = cs_entry;
+  create();
+}
+
+void pop_destroy() {
+  cds_entry_t *cs_entry = vk_env.cd_stack;
+  cs_entry->destroy();
+  vk_env.cd_stack = cs_entry->next;
+  hfree(cs_entry);
+}
+
+void create_instance() {
+  LOG_DEBUG_INFO("Begin create_instance()");
+
+#ifdef _DEBUG
+  // Pass debug_messenger_create_info to vkCreateInstance for temporary debug callback during instance creation
+  VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+  debug_messenger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY;
+  debug_messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE;
+  debug_messenger_create_info.pfnUserCallback = debug_messenger_callback;
+#endif
+  VkApplicationInfo app_info = { VK_STRUCTURE_TYPE_APPLICATION_INFO };
+  app_info.pApplicationName = APP_NAME;
+  app_info.applicationVersion = APP_VERSION;
+  app_info.pEngineName = ENGINE_NAME;
+  app_info.engineVersion = ENGINE_VERSION;
+  app_info.apiVersion = VK_API_VERSION_1_2;
+  VkInstanceCreateInfo instance_create_info = { VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+#ifdef _DEBUG
+  instance_create_info.pNext = &debug_messenger_create_info;
+#endif
+  instance_create_info.pApplicationInfo = &app_info;
+  instance_create_info.enabledLayerCount = validation_layer_count;
+  instance_create_info.ppEnabledLayerNames = validation_layers;
+  instance_create_info.enabledExtensionCount = instance_extension_count;
+  instance_create_info.ppEnabledExtensionNames = instance_extensions;
+  VK_CALL(vkCreateInstance(&instance_create_info, NULL, &vk_env.instance));
+  VK_CALL_EXT(vkCreateDebugUtilsMessengerEXT, vk_env.instance, &debug_messenger_create_info, NULL, &vk_env.debug_messenger);
+
+  LOG_DEBUG_INFO("End create_instance()");
+}
+
+void destroy_instance() {
+  LOG_DEBUG_INFO("Begin destroy_instance()");
+
+#ifdef _DEBUG
+  VK_CALL_EXT_VOID(vkDestroyDebugUtilsMessengerEXT, vk_env.instance, vk_env.debug_messenger, NULL);
+#endif
+  vkDestroyInstance(vk_env.instance, NULL);
+
+  LOG_DEBUG_INFO("End destroy_instance()");
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -89,11 +166,16 @@ void init_vulkan() {
     return;
   }
 
+  push_create(create_instance, destroy_instance);
+
   LOG_DEBUG_INFO("End init_vulkan()");
 }
 
 void cleanup_vulkan() {
   LOG_DEBUG_INFO("Begin cleanup_vulkan()");
+
+  while (vk_env.cd_stack)
+    pop_destroy();
 
   LOG_DEBUG_INFO("End cleanup_vulkan()");
 }
