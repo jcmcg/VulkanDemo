@@ -167,6 +167,177 @@ void destroy_surface() {
   LOG_DEBUG_INFO("Destroyed Vulkan Win32KHR surface");
 }
 
+VULKAN_ERROR select_surface_format(VkPhysicalDevice physical_device, VkSurfaceKHR surface, VkSurfaceFormatKHR *surface_format) {
+  uint32_t num_formats, i = 0;
+  VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &num_formats, NULL));
+  if (!num_formats)
+    return VE_NO_SURFACE_FORMATS;
+
+  VULKAN_ERROR ve = VE_OK;
+  VkSurfaceFormatKHR *surface_formats = halloc_type(VkSurfaceFormatKHR, num_formats);
+  VK_CALL(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &num_formats, surface_formats));
+
+  if (num_formats == 1 && surface_formats[0].format == VK_FORMAT_UNDEFINED) {
+    // Device supports any format
+    surface_formats[0].format = VK_FORMAT_B8G8R8A8_UNORM;
+    surface_formats[0].colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+  }
+  else
+    for (i = 0;
+         i < num_formats &&
+         !(surface_formats[i].format == VK_FORMAT_B8G8R8A8_UNORM ||
+           surface_formats[i].format == VK_FORMAT_R8G8B8A8_UNORM) &&
+         surface_formats[i].colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+         i++);
+  if (i < num_formats) {
+    *surface_format = surface_formats[i];
+    LOG_DEBUG_INFO("Selected surface format: %d", surface_format->format);
+  }
+  else
+    ve = VE_NO_SUITABLE_SURFACE_FORMAT;
+
+  hfree(surface_formats);
+  return ve;
+}
+
+VkBool32 set_num_buffers(VkPhysicalDevice physical_device, VkSurfaceKHR surface, GPU *gpu, uint32_t num_requested) {
+  LOG_DEBUG_INFO("%s buffering requested", num_requested == 2 ? "Double" : "Triple");
+  gpu->num_buffers = num_requested;
+  if (!(num_requested == 2 || num_requested == 3))
+    return VK_FALSE;
+  VkSurfaceCapabilitiesKHR surface_capabilities;
+  VK_CALL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_capabilities));
+  CLAMP(gpu->num_buffers, surface_capabilities.minImageCount, surface_capabilities.maxImageCount);
+  return gpu->num_buffers == num_requested;
+}
+
+VkBool32 set_present_mode(VkPresentModeKHR *present_modes, uint32_t num_modes,
+                          VkPresentModeKHR req_present_mode, VkPresentModeKHR *present_mode) {
+  uint32_t i;
+  for (i = 0;
+       i < num_modes &&
+       present_modes[i] != req_present_mode;
+       i++);
+  if (i < num_modes) {
+    *present_mode = req_present_mode;
+    LOG_DEBUG_INFO("Selected presentation mode: %d", req_present_mode);
+    return VK_TRUE;
+  }
+  return VK_FALSE;
+}
+
+VULKAN_ERROR select_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface, VkPresentModeKHR *present_mode) {
+  uint32_t num_modes;
+  VK_CALL(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &num_modes, NULL));
+  if (!num_modes)
+    return VE_NO_PRESENT_MODES;
+
+  VULKAN_ERROR ve = VE_OK;
+  VkPresentModeKHR *present_modes = halloc_type(VkPresentModeKHR, num_modes);
+  VK_CALL(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &num_modes, present_modes));
+  // Ideal: VK_PRESENT_MODE_MAILBOX_KHR
+  // Fallback: VK_PRESENT_MODE_FIFO_KHR (required to be supported)
+  if (!(set_present_mode(present_modes, num_modes, VK_PRESENT_MODE_MAILBOX_KHR, present_mode) ||
+        set_present_mode(present_modes, num_modes, VK_PRESENT_MODE_FIFO_KHR, present_mode)))
+    ve = VE_NO_SUITABLE_PRESENT_MODE;
+  hfree(present_modes);
+
+  return ve;
+}
+
+VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
+  LOG_DEBUG_INFO("Begin select_physical_device()");
+
+  uint32_t num_gpus = 0, num_extensions, num_queue_families, i, j;
+  VK_CALL(vkEnumeratePhysicalDevices(vk_env.instance, &num_gpus, NULL));
+  if (!num_gpus)
+    return VE_NO_PHYSICAL_DEVICES;
+  VkPhysicalDevice *physical_devices = halloc_type(VkPhysicalDevice, num_gpus);
+  VK_CALL(vkEnumeratePhysicalDevices(vk_env.instance, &num_gpus, physical_devices));
+  GPU *gpus = halloc_type(GPU, num_gpus);
+
+  VkPhysicalDeviceProperties properties;
+  VkPhysicalDeviceFeatures features;
+  GPU_SUPPORT best = GPU_SUPPORT_NONE;
+  int selected = -1;
+  VULKAN_ERROR ve = VE_NO_SUPPORTED_PHYSICAL_DEVICE;
+  for (i = 0; i < num_gpus; i++) {
+    gpus[i].device = physical_devices[i];
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &num_queue_families, NULL);
+    if (!num_queue_families)
+      continue;
+    gpus[i].graphics_qfi = UINT32_MAX;
+    gpus[i].present_qfi = UINT32_MAX;
+    VkQueueFamilyProperties *queue_families = halloc_type(VkQueueFamilyProperties, num_queue_families);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_devices[i], &num_queue_families, queue_families);
+    for (j = 0; j < num_queue_families; j++) {
+      if (gpus[i].graphics_qfi == UINT32_MAX &&
+          queue_families[j].queueCount &&
+          (queue_families[j].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)))
+        gpus[i].graphics_qfi = j;
+      if (gpus[i].present_qfi == UINT32_MAX) {
+        VkBool32 supported = VK_FALSE;
+        VK_CALL(vkGetPhysicalDeviceSurfaceSupportKHR(physical_devices[i], j, vk_env.surface, &supported));
+        if (supported)
+          gpus[i].present_qfi = j;
+      }
+    }
+    hfree(queue_families);
+    if (gpus[i].graphics_qfi == UINT32_MAX || gpus[i].present_qfi == UINT32_MAX)
+      continue;
+
+    gpus[i].support = GPU_SUPPORT_NONE;
+    VK_CALL(vkEnumerateDeviceExtensionProperties(physical_devices[i], NULL, &num_extensions, NULL));
+    if (!num_extensions)
+      continue;
+    VkExtensionProperties *extensions = halloc_type(VkExtensionProperties, num_extensions);
+    VK_CALL(vkEnumerateDeviceExtensionProperties(physical_devices[i], NULL, &num_extensions, extensions));
+    for (j = 0; j < num_extensions; j++) {
+      if (!strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME, extensions[j].extensionName))
+        gpus[i].support |= GPU_SUPPORT_RASTERIZATION;
+      else if (!strcmp(VK_NV_RAY_TRACING_EXTENSION_NAME, extensions[j].extensionName))
+        gpus[i].support |= GPU_SUPPORT_RAYTRACING;
+    }
+    hfree(extensions);
+
+    if (select_surface_format(physical_devices[i], vk_env.surface, &gpus[i].surface_format) ||
+        !set_num_buffers(physical_devices[i], vk_env.surface, &gpus[i], num_buffers) ||
+        select_present_mode(physical_devices[i], vk_env.surface, &gpus[i].present_mode))
+      continue;
+
+    vkGetPhysicalDeviceFeatures(physical_devices[i], &features);
+    if (features.textureCompressionBC)
+      gpus[i].support |= GPU_SUPPORT_TEXTURE_COMPRESSION;
+    if (features.samplerAnisotropy)
+      gpus[i].support |= GPU_SUPPORT_ANISTROPIC_FILTERING;
+
+    vkGetPhysicalDeviceProperties(physical_devices[i], &properties);
+    gpus[i].name = properties.deviceName;
+
+    if (gpus[i].support > best) {
+      best = gpus[i].support;
+      selected = i;
+    }
+  }
+
+  if (selected >= 0) {
+    GPU *gpu = &gpus[selected];
+    vkGetPhysicalDeviceMemoryProperties(gpu->device, &gpu->memory_properties);
+    memcpy(&vk_env.gpu, gpu, sizeof (GPU));
+    vk_env.gpu.name = _strdup(gpu->name);
+    if (gpu->graphics_qfi != gpu->present_qfi)
+      vk_env.distinct_qfi = true;
+    LOG_DEBUG_INFO("Selected physical device: %s", gpu->name);
+    ve = VE_OK;
+  }
+
+  hfree(gpus);
+  hfree(physical_devices);
+
+  LOG_DEBUG_INFO("End select_physical_device()");
+  return ve;
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -183,6 +354,11 @@ void init_vulkan() {
   push_create(create_instance, destroy_instance);
   push_create(create_surface, destroy_surface);
 
+  if ((vk_env.error = select_physical_device(NUM_BUFFERS))) {
+    LOG_DEBUG_ERROR(VK_ERRORS[vk_env.error]);
+    return;
+  }
+
   LOG_DEBUG_INFO("End init_vulkan()");
 }
 
@@ -191,6 +367,8 @@ void cleanup_vulkan() {
 
   while (vk_env.cd_stack)
     pop_destroy();
+  if (vk_env.gpu.name)
+    hfree(vk_env.gpu.name);
 
   LOG_DEBUG_INFO("End cleanup_vulkan()");
 }

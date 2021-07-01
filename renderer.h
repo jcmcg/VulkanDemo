@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <stdbool.h>
 
 #define APP_NAME "VulkanDemo"
 #define APP_VERSION VK_MAKE_VERSION(1, 0, 0)
@@ -8,6 +9,7 @@
 #define ENGINE_VERSION VK_MAKE_VERSION(1, 0, 0)
 
 #define ARRAY_COUNT(a) (sizeof (a) / sizeof (a[0]))
+#define CLAMP(V, MIN, MAX) if (V < MIN) V = MIN; else if (MAX && V > MAX) V = MAX
 
 #ifdef _DEBUG
 #define LOG_VK_ERROR(f, r) {               \
@@ -51,12 +53,22 @@ void log_vk_error(const char *, long, const char *, VkResult);
 #define VK_CALL_EXT_VOID(f, i, ...) VK_CALL_EXT(f, i, __VA_ARGS__)
 #endif // _DEBUG
 
+#define NUM_BUFFERS 3 // Triple buffering
+
 typedef enum {
   VE_OK,
   VE_NO_INSTANCE_LAYERS,
   VE_INSTANCE_LAYER_UNAVAILABLE,
   VE_NO_INSTANCE_EXTENSIONS,
-  VE_INSTANCE_EXTENSION_UNAVAILABLE
+  VE_INSTANCE_EXTENSION_UNAVAILABLE,
+  VE_NO_PHYSICAL_DEVICES,
+  VE_NO_SUPPORTED_PHYSICAL_DEVICE,
+  VE_NO_SURFACE_FORMATS,
+  VE_NO_SUITABLE_SURFACE_FORMAT,
+  VE_NO_PRESENT_MODES,
+  VE_NO_SUITABLE_PRESENT_MODE,
+  VE_NO_SUITABLE_DEPTH_FORMAT,
+  VE_NO_SUITABLE_TEXTURE_FORMAT
 } VULKAN_ERROR;
 
 typedef struct cds_entry_s cds_entry_t;
@@ -67,6 +79,29 @@ typedef struct cds_entry_s {
 
 typedef struct window_s window_t;
 
+typedef enum {
+  GPU_SUPPORT_NONE,
+  GPU_SUPPORT_RASTERIZATION = 1,
+  GPU_SUPPORT_RAYTRACING = 2,
+  GPU_SUPPORT_TEXTURE_COMPRESSION = 4,
+  GPU_SUPPORT_ANISTROPIC_FILTERING = 8
+} GPU_SUPPORT;
+
+typedef struct {
+  VkPhysicalDevice device;
+  char *name;
+  uint32_t graphics_qfi;
+  uint32_t present_qfi;
+  GPU_SUPPORT support;
+  VkSurfaceFormatKHR surface_format;
+  uint32_t num_buffers;
+  VkSampleCountFlagBits num_aa_samples;
+  VkPresentModeKHR present_mode;
+  VkFormat depth_format;
+  VkFormat texture_format;
+  VkPhysicalDeviceMemoryProperties memory_properties;
+} GPU;
+
 typedef struct vk_env_s {
   VULKAN_ERROR error;
   cds_entry_t *cd_stack;
@@ -76,6 +111,10 @@ typedef struct vk_env_s {
 #endif
   window_t *window;
   VkSurfaceKHR surface;
+  GPU gpu;
+  VkQueue graphics_queue;
+  VkQueue present_queue;
+  bool distinct_qfi;
 } vk_env_t;
 
 vk_env_t vk_env;
