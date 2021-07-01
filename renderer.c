@@ -415,6 +415,46 @@ void destroy_command_buffers() {
   LOG_DEBUG_INFO("Destroyed %d command buffers", vk_env.gpu.num_buffers);
 }
 
+void create_sync_objects() {
+  VkFenceCreateInfo fence_info = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+  fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+  VkSemaphoreCreateInfo semaphore_info = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+  // Allow maximum of (num_buffers - 1) concurrent frames
+  vk_env.frame_lag = vk_env.gpu.num_buffers - 1;
+  vk_env.fences = halloc_type(VkFence, vk_env.frame_lag);
+  vk_env.image_acquired_semaphores = halloc_type(VkSemaphore, vk_env.frame_lag);
+  vk_env.draw_complete_semaphores = halloc_type(VkSemaphore, vk_env.frame_lag);
+  if (vk_env.distinct_qfi)
+    vk_env.image_ownership_semaphores = halloc_type(VkSemaphore, vk_env.frame_lag);
+  uint32_t i;
+  for (i = 0; i < vk_env.frame_lag; i++) {
+    VK_CALL(vkCreateFence(vk_env.device, &fence_info, NULL, &vk_env.fences[i]));
+    VK_CALL(vkCreateSemaphore(vk_env.device, &semaphore_info, NULL, &vk_env.image_acquired_semaphores[i]));
+    VK_CALL(vkCreateSemaphore(vk_env.device, &semaphore_info, NULL, &vk_env.draw_complete_semaphores[i]));
+    if (vk_env.distinct_qfi)
+      VK_CALL(vkCreateSemaphore(vk_env.device, &semaphore_info, NULL, &vk_env.image_ownership_semaphores[i]));
+  }
+  LOG_DEBUG_INFO("Created %d fences and %d semaphores", i, i * (2 + vk_env.distinct_qfi));
+}
+
+void destroy_sync_objects() {
+  uint32_t i;
+  for (i = 0; i < vk_env.frame_lag; i++) {
+    vkWaitForFences(vk_env.device, 1, &vk_env.fences[i], VK_TRUE, UINT64_MAX);
+    vkDestroyFence(vk_env.device, vk_env.fences[i], NULL);
+    vkDestroySemaphore(vk_env.device, vk_env.image_acquired_semaphores[i], NULL);
+    vkDestroySemaphore(vk_env.device, vk_env.draw_complete_semaphores[i], NULL);
+    if (vk_env.distinct_qfi)
+      vkDestroySemaphore(vk_env.device, vk_env.image_ownership_semaphores[i], NULL);
+  }
+  hfree(vk_env.fences);
+  hfree(vk_env.image_acquired_semaphores);
+  hfree(vk_env.draw_complete_semaphores);
+  if (vk_env.distinct_qfi)
+    hfree(vk_env.image_ownership_semaphores);
+  LOG_DEBUG_INFO("Destroyed %d fences and %d semaphores", i, i * (2 + vk_env.distinct_qfi));
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -439,6 +479,7 @@ void init_vulkan() {
   push_create(create_logical_device, destroy_logical_device);
   push_create(create_command_pool, destroy_command_pool);
   push_create(create_command_buffers, destroy_command_buffers);
+  push_create(create_sync_objects, destroy_sync_objects);
 
   LOG_DEBUG_INFO("End init_vulkan()");
 }

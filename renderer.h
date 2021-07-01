@@ -118,6 +118,11 @@ typedef struct vk_env_s {
   VkDevice device;
   VkCommandPool command_pool;
   VkCommandBuffer *command_buffers;
+  VkFence *fences;
+  VkSemaphore *image_acquired_semaphores;
+  VkSemaphore *image_ownership_semaphores;
+  VkSemaphore *draw_complete_semaphores;
+  uint32_t frame_lag;
 } vk_env_t;
 
 vk_env_t vk_env;
