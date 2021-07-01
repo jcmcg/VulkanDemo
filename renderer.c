@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include "window.h"
 #include "log.h"
 #include "heap.h"
 
@@ -153,6 +154,19 @@ void destroy_instance() {
   LOG_DEBUG_INFO("End destroy_instance()");
 }
 
+void create_surface() {
+  VkWin32SurfaceCreateInfoKHR surface_create_info = { VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR };
+  surface_create_info.hinstance = vk_env.window->hinstance;
+  surface_create_info.hwnd = vk_env.window->hwnd;
+  VK_CALL(vkCreateWin32SurfaceKHR(vk_env.instance, &surface_create_info, NULL, &vk_env.surface));
+  LOG_DEBUG_INFO("Created Vulkan Win32KHR surface");
+}
+
+void destroy_surface() {
+  vkDestroySurfaceKHR(vk_env.instance, vk_env.surface, NULL);
+  LOG_DEBUG_INFO("Destroyed Vulkan Win32KHR surface");
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -167,6 +181,7 @@ void init_vulkan() {
   }
 
   push_create(create_instance, destroy_instance);
+  push_create(create_surface, destroy_surface);
 
   LOG_DEBUG_INFO("End init_vulkan()");
 }

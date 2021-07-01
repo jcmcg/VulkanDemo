@@ -65,6 +65,8 @@ typedef struct cds_entry_s {
   cds_entry_t *next;
 } cds_entry_t;
 
+typedef struct window_s window_t;
+
 typedef struct vk_env_s {
   VULKAN_ERROR error;
   cds_entry_t *cd_stack;
@@ -72,6 +74,8 @@ typedef struct vk_env_s {
 #ifdef _DEBUG
   VkDebugUtilsMessengerEXT debug_messenger;
 #endif
+  window_t *window;
+  VkSurfaceKHR surface;
 } vk_env_t;
 
 vk_env_t vk_env;
