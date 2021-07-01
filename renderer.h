@@ -123,6 +123,7 @@ typedef struct vk_env_s {
   VkSemaphore *image_ownership_semaphores;
   VkSemaphore *draw_complete_semaphores;
   uint32_t frame_lag;
+  VkRenderPass render_pass;
 } vk_env_t;
 
 vk_env_t vk_env;

@@ -455,6 +455,47 @@ void destroy_sync_objects() {
   LOG_DEBUG_INFO("Destroyed %d fences and %d semaphores", i, i * (2 + vk_env.distinct_qfi));
 }
 
+void create_render_pass() {
+  LOG_DEBUG_INFO("Begin create_render_pass()");
+
+  VkAttachmentDescription attachments[1] = { 0 }; // colour attachment
+  VkAttachmentDescription *colour_desc = &attachments[0];
+  colour_desc->format = vk_env.gpu.surface_format.format;
+  colour_desc->samples = VK_SAMPLE_COUNT_1_BIT;
+  colour_desc->loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  colour_desc->storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  colour_desc->stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  colour_desc->stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  colour_desc->initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  colour_desc->finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  // https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples
+  // The image will automatically be transitioned from
+  // VK_IMAGE_LAYOUT_UNDEFINED to VK_COLOR_ATTACHMENT_OPTIMAL for rendering,
+  // then out to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR at the end.
+  const VkAttachmentReference colour_attachment = {
+    0, // attachment
+    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL // layout
+  };
+
+  VkSubpassDescription subpass = { 0 };
+  subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  subpass.colorAttachmentCount = 1;
+  subpass.pColorAttachments = &colour_attachment;
+  VkRenderPassCreateInfo create_info = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
+  create_info.attachmentCount = 1;
+  create_info.pAttachments = attachments;
+  create_info.subpassCount = 1;
+  create_info.pSubpasses = &subpass;
+  VK_CALL(vkCreateRenderPass(vk_env.device, &create_info, NULL, &vk_env.render_pass));
+
+  LOG_DEBUG_INFO("End create_render_pass()");
+}
+
+void destroy_render_pass() {
+  vkDestroyRenderPass(vk_env.device, vk_env.render_pass, NULL);
+  LOG_DEBUG_INFO("Destroyed render pass");
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -480,6 +521,7 @@ void init_vulkan() {
   push_create(create_command_pool, destroy_command_pool);
   push_create(create_command_buffers, destroy_command_buffers);
   push_create(create_sync_objects, destroy_sync_objects);
+  push_create(create_render_pass, destroy_render_pass);
 
   LOG_DEBUG_INFO("End init_vulkan()");
 }
