@@ -382,9 +382,37 @@ void create_logical_device() {
 
 void destroy_logical_device() {
   LOG_DEBUG_INFO("Begin destroy_logical_device()");
-  //vkDeviceWaitIdle(vk_env.device); // Is this necessary?
   vkDestroyDevice(vk_env.device, NULL);
   LOG_DEBUG_INFO("End destroy_logical_device()");
+}
+
+void create_command_pool() {
+  VkCommandPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+  create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+  create_info.queueFamilyIndex = vk_env.gpu.graphics_qfi;
+  VK_CALL(vkCreateCommandPool(vk_env.device, &create_info, NULL, &vk_env.command_pool));
+  LOG_DEBUG_INFO("Created command pool");
+}
+
+void destroy_command_pool() {
+  vkDestroyCommandPool(vk_env.device, vk_env.command_pool, NULL);
+  LOG_DEBUG_INFO("Destroyed command pool");
+}
+
+void create_command_buffers() {
+  VkCommandBufferAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+  allocate_info.commandPool = vk_env.command_pool;
+  allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocate_info.commandBufferCount = vk_env.gpu.num_buffers;
+  vk_env.command_buffers = halloc_type(VkCommandBuffer, vk_env.gpu.num_buffers);
+  VK_CALL(vkAllocateCommandBuffers(vk_env.device, &allocate_info, vk_env.command_buffers));
+  LOG_DEBUG_INFO("Created %d command buffers", vk_env.gpu.num_buffers);
+}
+
+void destroy_command_buffers() {
+  vkFreeCommandBuffers(vk_env.device, vk_env.command_pool, vk_env.gpu.num_buffers, vk_env.command_buffers);
+  hfree(vk_env.command_buffers);
+  LOG_DEBUG_INFO("Destroyed %d command buffers", vk_env.gpu.num_buffers);
 }
 
 void init_vulkan() {
@@ -409,6 +437,8 @@ void init_vulkan() {
   }
 
   push_create(create_logical_device, destroy_logical_device);
+  push_create(create_command_pool, destroy_command_pool);
+  push_create(create_command_buffers, destroy_command_buffers);
 
   LOG_DEBUG_INFO("End init_vulkan()");
 }
