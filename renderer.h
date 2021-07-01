@@ -115,6 +115,7 @@ typedef struct vk_env_s {
   VkQueue graphics_queue;
   VkQueue present_queue;
   bool distinct_qfi;
+  VkDevice device;
 } vk_env_t;
 
 vk_env_t vk_env;

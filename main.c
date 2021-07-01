@@ -14,8 +14,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 
   if (create_window(&window) == WE_OK) {
     MSG msg = { 0 };
-    while (window.active) {
-      while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+    while (msg.message != WM_QUIT) {
+      if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
       }

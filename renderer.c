@@ -29,6 +29,11 @@ const char *instance_extensions[] = {
 };
 const uint32_t instance_extension_count = ARRAY_COUNT(instance_extensions);
 
+const char *device_extensions[] = {
+  VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+const uint32_t device_extension_count = ARRAY_COUNT(device_extensions);
+
 #ifdef _DEBUG
 void log_vk_error(const char *file, long line, const char *function, VkResult error) {
   log_console_error("VULKAN ERROR: '%s', line %ld, '%s' - VkResult: %d", file, line, function, error);
@@ -338,6 +343,50 @@ VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
   return ve;
 }
 
+void create_logical_device() {
+  LOG_DEBUG_INFO("Begin create_logical_device()");
+
+  // Number of queues will be 1 or 2 depending on whether or not graphics_qfi == present_qfi
+  uint32_t num_queues = 1 + vk_env.distinct_qfi;
+  const float queue_priorities[1] = { 1.0f };
+  VkDeviceQueueCreateInfo *queue_create_info = halloc_clear_type(VkDeviceQueueCreateInfo, num_queues);
+  for (uint32_t i = 0; i < num_queues; i++) {
+    queue_create_info[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queue_create_info[i].queueFamilyIndex = i ? vk_env.gpu.present_qfi : vk_env.gpu.graphics_qfi;
+    queue_create_info[i].queueCount = 1;
+    queue_create_info[i].pQueuePriorities = queue_priorities;
+  }
+
+  VkPhysicalDeviceFeatures device_features = { 0 };
+  device_features.textureCompressionBC = VK_TRUE;
+  device_features.samplerAnisotropy = VK_TRUE;
+
+  VkDeviceCreateInfo device_info = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
+  device_info.queueCreateInfoCount = num_queues;
+  device_info.pQueueCreateInfos = queue_create_info;
+  device_info.enabledExtensionCount = device_extension_count;
+  device_info.ppEnabledExtensionNames = device_extensions;
+  device_info.pEnabledFeatures = &device_features;
+  VK_CALL(vkCreateDevice(vk_env.gpu.device, &device_info, NULL, &vk_env.device));
+
+  vkGetDeviceQueue(vk_env.device, vk_env.gpu.graphics_qfi, 0, &vk_env.graphics_queue);
+  if (vk_env.distinct_qfi)
+    vkGetDeviceQueue(vk_env.device, vk_env.gpu.present_qfi, 0, &vk_env.present_queue);
+  else
+    vk_env.present_queue = vk_env.graphics_queue;
+
+  hfree(queue_create_info);
+
+  LOG_DEBUG_INFO("End create_logical_device()");
+}
+
+void destroy_logical_device() {
+  LOG_DEBUG_INFO("Begin destroy_logical_device()");
+  //vkDeviceWaitIdle(vk_env.device); // Is this necessary?
+  vkDestroyDevice(vk_env.device, NULL);
+  LOG_DEBUG_INFO("End destroy_logical_device()");
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -358,6 +407,8 @@ void init_vulkan() {
     LOG_DEBUG_ERROR(VK_ERRORS[vk_env.error]);
     return;
   }
+
+  push_create(create_logical_device, destroy_logical_device);
 
   LOG_DEBUG_INFO("End init_vulkan()");
 }
