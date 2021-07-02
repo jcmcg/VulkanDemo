@@ -455,6 +455,17 @@ void destroy_sync_objects() {
   LOG_DEBUG_INFO("Destroyed %d fences and %d semaphores", i, i * (2 + vk_env.distinct_qfi));
 }
 
+VkResult create_image_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspect_mask, VkImageView *image_view) {
+  VkImageViewCreateInfo create_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+  create_info.image = image;
+  create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  create_info.format = format;
+  create_info.subresourceRange.aspectMask = aspect_mask;
+  create_info.subresourceRange.levelCount = 1;
+  create_info.subresourceRange.layerCount = 1;
+  return vkCreateImageView(device, &create_info, NULL, image_view);
+}
+
 void create_render_pass() {
   LOG_DEBUG_INFO("Begin create_render_pass()");
 
@@ -498,6 +509,14 @@ void destroy_render_pass() {
 
 void destroy_swapchain(VkSwapchainKHR swapchain) {
   VK_CALL(vkDeviceWaitIdle(vk_env.device));
+  for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
+    vkDestroyFramebuffer(vk_env.device, vk_env.framebuffers[i], NULL);
+    vkDestroyImageView(vk_env.device, vk_env.swapchain_views[i], NULL);
+  }
+  hfree(vk_env.framebuffers);
+  hfree(vk_env.swapchain_views);
+  hfree(vk_env.swapchain_images);
+  LOG_DEBUG_INFO("Destroyed %d swapchain images, views and framebuffers", vk_env.gpu.num_buffers);
   vkDestroySwapchainKHR(vk_env.device, swapchain, NULL);
 }
 
@@ -581,6 +600,38 @@ void create_swapchain() {
     destroy_swapchain(old_swapchain);
     LOG_DEBUG_INFO("Destroyed old swapchain");
   }
+
+  // Have to call vkGetSwapchainImagesKHR twice, although we already know the value of num_buffers,
+  // to prevent UNASSIGNED-CoreValidation-SwapchainInvalidCount
+  VK_CALL(vkGetSwapchainImagesKHR(vk_env.device, vk_env.swapchain, &vk_env.gpu.num_buffers, NULL));
+  vk_env.swapchain_images = halloc_type(VkImage, vk_env.gpu.num_buffers);
+  VK_CALL(vkGetSwapchainImagesKHR(vk_env.device, vk_env.swapchain, &vk_env.gpu.num_buffers, vk_env.swapchain_images));
+  vk_env.swapchain_views = halloc_type(VkImageView, vk_env.gpu.num_buffers);
+  vk_env.framebuffers = halloc_type(VkFramebuffer, vk_env.gpu.num_buffers);
+
+  VkImageView attachments[1] = { VK_NULL_HANDLE };
+  VkFramebufferCreateInfo create_info = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
+  create_info.renderPass = vk_env.render_pass;
+  create_info.attachmentCount = 1;
+  create_info.pAttachments = attachments;
+  create_info.width = vk_env.window->width;
+  create_info.height = vk_env.window->height;
+  create_info.layers = 1;
+  for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
+    VK_CALL(create_image_view(
+      vk_env.device,
+      vk_env.swapchain_images[i],
+      vk_env.gpu.surface_format.format,
+      VK_IMAGE_ASPECT_COLOR_BIT,
+      &vk_env.swapchain_views[i]
+    ));
+    attachments[0] = vk_env.swapchain_views[i];
+    VK_CALL(vkCreateFramebuffer(vk_env.device, &create_info, NULL, &vk_env.framebuffers[i]));
+    // ERROR Validation Error : [VUID - VkFramebufferCreateInfo - width - 00885]
+    // Object 0 : handle = 0x1ddce66c638, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0xb6981526 |
+    // vkCreateFramebuffer() : Requested VkFramebufferCreateInfo width must be greater than zero.
+  }
+  LOG_DEBUG_INFO("Created %d swapchain images, views and framebuffers", vk_env.gpu.num_buffers);
 
   LOG_DEBUG_INFO("End create_swapchain()");
 }

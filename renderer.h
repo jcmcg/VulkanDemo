@@ -127,6 +127,9 @@ typedef struct vk_env_s {
   uint32_t frame_lag;
   VkRenderPass render_pass;
   VkSwapchainKHR swapchain;
+  VkImage *swapchain_images;
+  VkImageView *swapchain_views;
+  VkFramebuffer *framebuffers;
 } vk_env_t;
 
 vk_env_t vk_env;
