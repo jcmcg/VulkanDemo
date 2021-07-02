@@ -1,7 +1,6 @@
 #pragma once
 
 #include <windows.h>
-#include <stdbool.h>
 
 #define WIN_NAME "VulkanDemo"
 
@@ -14,7 +13,6 @@ typedef enum {
 typedef struct window_s {
   HINSTANCE hinstance;
   HWND hwnd;
-  bool active;
   WORD width;
   WORD height;
   void (*on_create)();

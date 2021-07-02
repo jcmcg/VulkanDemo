@@ -10,6 +10,7 @@
 
 #define ARRAY_COUNT(a) (sizeof (a) / sizeof (a[0]))
 #define CLAMP(V, MIN, MAX) if (V < MIN) V = MIN; else if (MAX && V > MAX) V = MAX
+#define FLAGGED(g, f) (((g) & (f)) == (f))
 
 #ifdef _DEBUG
 #define LOG_VK_ERROR(f, r) {               \
@@ -104,6 +105,7 @@ typedef struct {
 
 typedef struct vk_env_s {
   VULKAN_ERROR error;
+  bool initialized;
   cds_entry_t *cd_stack;
   VkInstance instance;
 #ifdef _DEBUG
@@ -124,9 +126,11 @@ typedef struct vk_env_s {
   VkSemaphore *draw_complete_semaphores;
   uint32_t frame_lag;
   VkRenderPass render_pass;
+  VkSwapchainKHR swapchain;
 } vk_env_t;
 
 vk_env_t vk_env;
 
 void init_vulkan();
 void cleanup_vulkan();
+void resize();

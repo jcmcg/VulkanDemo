@@ -278,7 +278,7 @@ VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
     for (j = 0; j < num_queue_families; j++) {
       if (gpus[i].graphics_qfi == UINT32_MAX &&
           queue_families[j].queueCount &&
-          (queue_families[j].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)))
+          FLAGGED(queue_families[j].queueFlags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT))
         gpus[i].graphics_qfi = j;
       if (gpus[i].present_qfi == UINT32_MAX) {
         VkBool32 supported = VK_FALSE;
@@ -496,6 +496,100 @@ void destroy_render_pass() {
   LOG_DEBUG_INFO("Destroyed render pass");
 }
 
+void destroy_swapchain(VkSwapchainKHR swapchain) {
+  VK_CALL(vkDeviceWaitIdle(vk_env.device));
+  vkDestroySwapchainKHR(vk_env.device, swapchain, NULL);
+}
+
+void create_swapchain() {
+  LOG_DEBUG_INFO("Begin create_swapchain()");
+
+  VkSurfaceCapabilitiesKHR surface_capabilities;
+  VK_CALL(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk_env.gpu.device, vk_env.surface, &surface_capabilities));
+  VkExtent2D swapchain_extent;
+  if (surface_capabilities.currentExtent.width == UINT32_MAX) {
+    swapchain_extent.width = vk_env.window->width;
+    swapchain_extent.height = vk_env.window->height;
+    // Clamp to values allowed by the GPU
+    CLAMP(swapchain_extent.width, surface_capabilities.minImageExtent.width, surface_capabilities.maxImageExtent.width);
+    CLAMP(swapchain_extent.height, surface_capabilities.minImageExtent.height, surface_capabilities.maxImageExtent.height);
+  }
+  else {
+    swapchain_extent = surface_capabilities.currentExtent;
+    vk_env.window->width = swapchain_extent.width;
+    vk_env.window->height = swapchain_extent.height;
+  }
+
+  if (swapchain_extent.width && swapchain_extent.height) {
+    LOG_DEBUG_INFO("Swapchain extent: (%d, %d)", swapchain_extent.width, swapchain_extent.height);
+    vk_env.window->minimized = false;
+  }
+  else {
+    // This happens if there's a VK_ERROR_OUT_OF_DATE_KHR error during a render cycle
+    LOG_DEBUG_WARNING("Window minimized - swapchain not created");
+    vk_env.window->minimized = true;
+    return;
+  }
+
+  VkSwapchainKHR old_swapchain = vk_env.swapchain;
+  VkSwapchainCreateInfoKHR swapchain_create_info = { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
+  swapchain_create_info.surface = vk_env.surface;
+  swapchain_create_info.minImageCount = vk_env.gpu.num_buffers;
+  swapchain_create_info.imageFormat = vk_env.gpu.surface_format.format;
+  swapchain_create_info.imageColorSpace = vk_env.gpu.surface_format.colorSpace;
+  swapchain_create_info.imageExtent = swapchain_extent;
+  swapchain_create_info.imageArrayLayers = 1;
+  // swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  // ERROR Validation Error : [VUID - vkCmdClearColorImage - image - 00002] Object 0 :
+  // handle = 0xd76249000000000c, type = VK_OBJECT_TYPE_IMAGE; | MessageID = 0x636f8691 |
+  // vkCmdClearColorImage() pRanges[0] called with image VkImage 0xd76249000000000c[]
+  // which was created without VK_IMAGE_USAGE_TRANSFER_DST_BIT.The Vulkan spec states :
+  // image must have been created with VK_IMAGE_USAGE_TRANSFER_DST_BIT usage flag
+  // (https ://vulkan.lunarg.com/doc/view/1.2.154.1/windows/1.2-extensions/vkspec.html#VUID-vkCmdClearColorImage-image-00002)
+  swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  uint32_t queue_family_indexes[] = { vk_env.gpu.graphics_qfi, vk_env.gpu.present_qfi };
+  if (vk_env.distinct_qfi) {
+    swapchain_create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+    swapchain_create_info.queueFamilyIndexCount = 2;
+    swapchain_create_info.pQueueFamilyIndices = queue_family_indexes;
+  }
+  else {
+    swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchain_create_info.queueFamilyIndexCount = 1;
+    swapchain_create_info.pQueueFamilyIndices = &vk_env.gpu.graphics_qfi;
+  }
+  swapchain_create_info.preTransform = FLAGGED(surface_capabilities.supportedTransforms,
+                                               VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+                                     ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+                                     : surface_capabilities.currentTransform;
+  // Find supported composite alpha mode
+  // Prefer: VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
+  // Default: VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
+  VkCompositeAlphaFlagBitsKHR composite_alpha;
+  for (composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+       composite_alpha < VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR &&
+       !FLAGGED(surface_capabilities.supportedCompositeAlpha, composite_alpha);
+       composite_alpha <<= 1);
+  swapchain_create_info.compositeAlpha = composite_alpha;
+  swapchain_create_info.presentMode = vk_env.gpu.present_mode;
+  swapchain_create_info.clipped = VK_TRUE;
+  swapchain_create_info.oldSwapchain = old_swapchain;
+  VK_CALL(vkCreateSwapchainKHR(vk_env.device, &swapchain_create_info, NULL, &vk_env.swapchain));
+  LOG_DEBUG_INFO("Created new swapchain");
+
+  if (old_swapchain) {
+    destroy_swapchain(old_swapchain);
+    LOG_DEBUG_INFO("Destroyed old swapchain");
+  }
+
+  LOG_DEBUG_INFO("End create_swapchain()");
+}
+
+void destroy_swapchain_final() {
+  destroy_swapchain(vk_env.swapchain);
+  LOG_DEBUG_INFO("Destroyed swapchain");
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -522,6 +616,9 @@ void init_vulkan() {
   push_create(create_command_buffers, destroy_command_buffers);
   push_create(create_sync_objects, destroy_sync_objects);
   push_create(create_render_pass, destroy_render_pass);
+  push_create(create_swapchain, destroy_swapchain_final);
+
+  vk_env.initialized = true;
 
   LOG_DEBUG_INFO("End init_vulkan()");
 }
@@ -535,4 +632,10 @@ void cleanup_vulkan() {
     hfree(vk_env.gpu.name);
 
   LOG_DEBUG_INFO("End cleanup_vulkan()");
+}
+
+void resize() {
+  if (!vk_env.initialized)
+    return;
+  create_swapchain();
 }

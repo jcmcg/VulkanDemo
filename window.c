@@ -15,11 +15,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)window);
       window->hwnd = hWnd;
       window->on_create();
-      window->active = true;
       break;
     case WM_DESTROY:
       SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
-      window->active = false;
       window->on_destroy();
       PostQuitMessage(0);
       break;

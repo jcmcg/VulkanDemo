@@ -24,5 +24,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
   }
   cleanup_window(&window);
 
+  LOG_DEBUG_INFO("Returning %d", rc);
   return rc;
 }
