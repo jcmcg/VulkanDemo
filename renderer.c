@@ -107,12 +107,14 @@ void push_create(void (*create)(), void (*destroy)()) {
   cs_entry->destroy = destroy;
   cs_entry->next = vk_env.cd_stack;
   vk_env.cd_stack = cs_entry;
-  create();
+  if (create)
+    create();
 }
 
 void pop_destroy() {
   cds_entry_t *cs_entry = vk_env.cd_stack;
-  cs_entry->destroy();
+  if (cs_entry->destroy)
+    cs_entry->destroy();
   vk_env.cd_stack = cs_entry->next;
   hfree(cs_entry);
 }
@@ -667,7 +669,7 @@ void init_vulkan() {
   push_create(create_command_buffers, destroy_command_buffers);
   push_create(create_sync_objects, destroy_sync_objects);
   push_create(create_render_pass, destroy_render_pass);
-  push_create(create_swapchain, destroy_swapchain_final);
+  push_create(NULL, destroy_swapchain_final);
 
   vk_env.initialized = true;
 
