@@ -17,6 +17,13 @@ const vertex_t rect[] = {
 { {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
 };
 
+float mvp[] = {
+  1.0f, 0.0f, 0.0f, 0.0f,
+  0.0f, 1.0f, 0.0f, 0.0f,
+  0.0f, 0.0f, 1.0f, 0.0f,
+  0.0f, 0.0f, 0.0f, 1.0f
+};
+
 const char *VK_ERRORS[] = {
   "OK",
   "No validation layers available",
@@ -603,21 +610,21 @@ void create_vertex_buffer() {
   VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
   buffer_info.size = sizeof rect;
   buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-  VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.vertex_buffer.buffer));
+  VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.rect_vb.buffer));
   LOG_DEBUG_INFO("Created vertex buffer");
 
   VkMemoryRequirements memory_requirements;
-  vkGetBufferMemoryRequirements(vk_env.device, vk_env.vertex_buffer.buffer, &memory_requirements);
+  vkGetBufferMemoryRequirements(vk_env.device, vk_env.rect_vb.buffer, &memory_requirements);
   alloc_device_memory(
     memory_requirements,
     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-    &vk_env.vertex_buffer.device_memory
+    &vk_env.rect_vb.device_memory
   );
-  VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.vertex_buffer.buffer, vk_env.vertex_buffer.device_memory, 0));
+  VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.rect_vb.buffer, vk_env.rect_vb.device_memory, 0));
   void *data;
-  VK_CALL(vkMapMemory(vk_env.device, vk_env.vertex_buffer.device_memory, 0, sizeof rect, 0, &data));
+  VK_CALL(vkMapMemory(vk_env.device, vk_env.rect_vb.device_memory, 0, sizeof rect, 0, &data));
   memcpy(data, rect, sizeof rect);
-  vkUnmapMemory(vk_env.device, vk_env.vertex_buffer.device_memory);
+  vkUnmapMemory(vk_env.device, vk_env.rect_vb.device_memory);
   LOG_DEBUG_INFO("Loaded vertex buffer into device memory");
 
   LOG_DEBUG_INFO("End create_vertex_buffer()");
@@ -626,12 +633,48 @@ void create_vertex_buffer() {
 void destroy_vertex_buffer() {
   LOG_DEBUG_INFO("Begin destroy_vertex_buffer()");
 
-  vkFreeMemory(vk_env.device, vk_env.vertex_buffer.device_memory, NULL);
+  vkFreeMemory(vk_env.device, vk_env.rect_vb.device_memory, NULL);
   LOG_DEBUG_INFO("Freed vertex buffer device memory");
-  vkDestroyBuffer(vk_env.device, vk_env.vertex_buffer.buffer, NULL);
+  vkDestroyBuffer(vk_env.device, vk_env.rect_vb.buffer, NULL);
   LOG_DEBUG_INFO("Destroyed vertex buffer");
 
   LOG_DEBUG_INFO("End destroy_vertex_buffer()");
+}
+
+void create_uniform_buffer() {
+  LOG_DEBUG_INFO("Begin create_uniform_buffer()");
+
+  VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+  buffer_info.size = sizeof mvp;
+  buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+  VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.mvp_ub.buffer));
+  LOG_DEBUG_INFO("Created uniform buffer");
+
+  VkMemoryRequirements memory_requirements;
+  vkGetBufferMemoryRequirements(vk_env.device, vk_env.mvp_ub.buffer, &memory_requirements);
+  alloc_device_memory(
+    memory_requirements,
+    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    &vk_env.mvp_ub.device_memory
+  );
+  VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.mvp_ub.buffer, vk_env.mvp_ub.device_memory, 0));
+  VK_CALL(vkMapMemory(vk_env.device, vk_env.mvp_ub.device_memory, 0, sizeof mvp, 0, &vk_env.mvp_ub.mem_ptr));
+  LOG_DEBUG_INFO("Mapped uniform buffer to device memory");
+
+  LOG_DEBUG_INFO("End create_uniform_buffer()");
+}
+
+void destroy_uniform_buffer() {
+  LOG_DEBUG_INFO("Begin destroy_uniform_buffer()");
+
+  vkUnmapMemory(vk_env.device, vk_env.mvp_ub.device_memory);
+  LOG_DEBUG_INFO("Unmapped uniform buffer pointer");
+  vkFreeMemory(vk_env.device, vk_env.mvp_ub.device_memory, NULL);
+  LOG_DEBUG_INFO("Freed uniform buffer device memory");
+  vkDestroyBuffer(vk_env.device, vk_env.mvp_ub.buffer, NULL);
+  LOG_DEBUG_INFO("Destroyed uniform buffer");
+
+  LOG_DEBUG_INFO("End destroy_uniform_buffer()");
 }
 
 void create_layouts() {
@@ -917,6 +960,7 @@ void init_vulkan() {
   push_create(create_render_pass, destroy_render_pass);
   push_create(create_shader_modules, destroy_shader_modules);
   push_create(create_vertex_buffer, destroy_vertex_buffer);
+  push_create(create_uniform_buffer, destroy_uniform_buffer);
   push_create(create_layouts, destroy_layouts);
   push_create(create_pipeline_cache, destroy_pipeline_cache);
   push_create(create_pipeline, destroy_pipeline);
@@ -1030,7 +1074,7 @@ void buffer_commands(uint32_t buffer_index) {
   vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_env.pipeline);
   // Vertex buffer
   VkDeviceSize offset = 0;
-  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.vertex_buffer.buffer, &offset);
+  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.rect_vb.buffer, &offset);
   // Viewport
   VkViewport viewport = { 0 };
   float viewport_dimension;
@@ -1066,6 +1110,7 @@ void render() {
   if (vk_env.window->minimized)
     return;
   begin_render(vk_env);
+  memcpy(vk_env.mvp_ub.mem_ptr, mvp, sizeof mvp);
   buffer_commands(vk_env.current_buffer);
   end_render(vk_env);
 }

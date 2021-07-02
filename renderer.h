@@ -112,6 +112,12 @@ typedef struct {
   VkDeviceMemory device_memory;
 } VkVertexBuffer;
 
+typedef struct {
+  VkBuffer buffer;
+  VkDeviceMemory device_memory;
+  void *mem_ptr;
+} VkUniformBuffer;
+
 typedef struct vk_env_s {
   VULKAN_ERROR error;
   bool initialized;
@@ -144,7 +150,8 @@ typedef struct vk_env_s {
   VkImage *swapchain_images;
   VkImageView *swapchain_views;
   VkFramebuffer *framebuffers;
-  VkVertexBuffer vertex_buffer;
+  VkVertexBuffer rect_vb;
+  VkUniformBuffer mvp_ub;
   uint32_t frame_index;
   uint32_t current_buffer;
 } vk_env_t;
