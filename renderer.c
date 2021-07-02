@@ -570,6 +570,29 @@ void destroy_shader_modules() {
   destroy_shader_module("frag");
 }
 
+void create_layouts() {
+  // Pipeline layout
+  VkPipelineLayoutCreateInfo pipeline_layout_info = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+  VK_CALL(vkCreatePipelineLayout(vk_env.device, &pipeline_layout_info, NULL, &vk_env.pipeline_layout));
+  LOG_DEBUG_INFO("Created pipeline layout");
+}
+
+void destroy_layouts() {
+  vkDestroyPipelineLayout(vk_env.device, vk_env.pipeline_layout, NULL);
+  LOG_DEBUG_INFO("Destroyed pipeline layout");
+}
+
+void create_pipeline_cache() {
+  VkPipelineCacheCreateInfo pipeline_cache_create_info = { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
+  VK_CALL(vkCreatePipelineCache(vk_env.device, &pipeline_cache_create_info, NULL, &vk_env.pipeline_cache));
+  LOG_DEBUG_INFO("Created pipeline cache");
+}
+
+void destroy_pipeline_cache() {
+  vkDestroyPipelineCache(vk_env.device, vk_env.pipeline_cache, NULL);
+  LOG_DEBUG_INFO("Destroyed pipeline cache");
+}
+
 void destroy_swapchain(VkSwapchainKHR swapchain) {
   VK_CALL(vkDeviceWaitIdle(vk_env.device));
   for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
@@ -732,6 +755,8 @@ void init_vulkan() {
   push_create(create_sync_objects, destroy_sync_objects);
   push_create(create_render_pass, destroy_render_pass);
   push_create(create_shader_modules, destroy_shader_modules);
+  push_create(create_layouts, destroy_layouts);
+  push_create(create_pipeline_cache, destroy_pipeline_cache);
   push_create(NULL, destroy_swapchain_final);
 
   vk_env.initialized = true;
