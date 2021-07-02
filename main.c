@@ -11,6 +11,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
   window.on_create = init_vulkan;
   window.on_destroy = cleanup_vulkan;
   window.on_size = resize;
+  window.on_move = move;
   window.on_paint = render;
   vk_env.window = &window;
 

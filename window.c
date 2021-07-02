@@ -37,6 +37,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         case VK_ESCAPE:
           DestroyWindow(hWnd);
           break;
+        case 'A':
+          window->on_move(-1, 0);
+          break;
+        case 'D':
+          window->on_move(1, 0);
+          break;
+        case 'W':
+          window->on_move(0, 1);
+          break;
+        case 'S':
+          window->on_move(0, -1);
+          break;
       }
       break;
     default:

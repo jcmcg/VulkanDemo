@@ -173,4 +173,5 @@ typedef struct {
 void init_vulkan();
 void cleanup_vulkan();
 void resize();
+void move(int, int);
 void render();

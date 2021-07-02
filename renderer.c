@@ -1054,6 +1054,11 @@ void resize() {
   create_swapchain();
 }
 
+void move(int x, int y) {
+  mvp[12] += x * 0.01f;
+  mvp[13] += y * 0.01f;
+}
+
 VkResult handle_swapchain_result(VkResult ve) {
   switch (ve) {
     case VK_ERROR_OUT_OF_DATE_KHR:
