@@ -107,6 +107,11 @@ typedef struct {
   VkPhysicalDeviceMemoryProperties memory_properties;
 } GPU;
 
+typedef struct {
+  VkBuffer buffer;
+  VkDeviceMemory device_memory;
+} VkVertexBuffer;
+
 typedef struct vk_env_s {
   VULKAN_ERROR error;
   bool initialized;
@@ -139,11 +144,21 @@ typedef struct vk_env_s {
   VkImage *swapchain_images;
   VkImageView *swapchain_views;
   VkFramebuffer *framebuffers;
+  VkVertexBuffer vertex_buffer;
   uint32_t frame_index;
   uint32_t current_buffer;
 } vk_env_t;
 
 vk_env_t vk_env;
+
+typedef struct {
+  float x, y, z;
+} vec3_t;
+
+typedef struct {
+  vec3_t position;
+  vec3_t colour;
+} vertex_t;
 
 void init_vulkan();
 void cleanup_vulkan();

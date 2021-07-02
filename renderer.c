@@ -6,10 +6,21 @@
 
 vk_env_t vk_env = { VE_OK };
 
+const vertex_t rect[] = {
+  // position             // colour
+{ {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+{ { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+{ {  0.8f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+
+{ { -0.8f,  0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+{ { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+{ {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+};
+
 const char *VK_ERRORS[] = {
   "OK",
-  "No instance layers available",
-  "Required instance layer unavailable",
+  "No validation layers available",
+  "Required validation layer unavailable",
   "No instance extensions available",
   "Required instance extension unavailable",
   "No physical devices available",
@@ -570,6 +581,59 @@ void destroy_shader_modules() {
   destroy_shader_module("frag");
 }
 
+void alloc_device_memory(VkMemoryRequirements requirements, VkFlags flags, VkDeviceMemory *device_memory) {
+  VkMemoryAllocateInfo mem_alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+  mem_alloc_info.allocationSize = requirements.size;
+  uint32_t index;
+  for (
+    index = 0;
+    index < VK_MAX_MEMORY_TYPES &&
+    !(FLAGGED(requirements.memoryTypeBits, 1 << index) &&
+      FLAGGED(vk_env.gpu.memory_properties.memoryTypes[index].propertyFlags, flags));
+    index++
+    );
+  mem_alloc_info.memoryTypeIndex = index;
+  VK_CALL(vkAllocateMemory(vk_env.device, &mem_alloc_info, NULL, device_memory));
+  LOG_DEBUG_INFO("Allocated %llu bytes of device memory", requirements.size);
+}
+
+void create_vertex_buffer() {
+  LOG_DEBUG_INFO("Begin create_vertex_buffer()");
+
+  VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+  buffer_info.size = sizeof rect;
+  buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+  VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.vertex_buffer.buffer));
+  LOG_DEBUG_INFO("Created vertex buffer");
+
+  VkMemoryRequirements memory_requirements;
+  vkGetBufferMemoryRequirements(vk_env.device, vk_env.vertex_buffer.buffer, &memory_requirements);
+  alloc_device_memory(
+    memory_requirements,
+    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+    &vk_env.vertex_buffer.device_memory
+  );
+  VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.vertex_buffer.buffer, vk_env.vertex_buffer.device_memory, 0));
+  void *data;
+  VK_CALL(vkMapMemory(vk_env.device, vk_env.vertex_buffer.device_memory, 0, sizeof rect, 0, &data));
+  memcpy(data, rect, sizeof rect);
+  vkUnmapMemory(vk_env.device, vk_env.vertex_buffer.device_memory);
+  LOG_DEBUG_INFO("Loaded vertex buffer into device memory");
+
+  LOG_DEBUG_INFO("End create_vertex_buffer()");
+}
+
+void destroy_vertex_buffer() {
+  LOG_DEBUG_INFO("Begin destroy_vertex_buffer()");
+
+  vkFreeMemory(vk_env.device, vk_env.vertex_buffer.device_memory, NULL);
+  LOG_DEBUG_INFO("Freed vertex buffer device memory");
+  vkDestroyBuffer(vk_env.device, vk_env.vertex_buffer.buffer, NULL);
+  LOG_DEBUG_INFO("Destroyed vertex buffer");
+
+  LOG_DEBUG_INFO("End destroy_vertex_buffer()");
+}
+
 void create_layouts() {
   // Pipeline layout
   VkPipelineLayoutCreateInfo pipeline_layout_info = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
@@ -609,7 +673,24 @@ void create_pipeline() {
   shader_stages[1].pName = SHADER_ENTRY_POINT_NAME;
 
   // Vertex input state
+  VkVertexInputBindingDescription binding_description = { 0 };
+  binding_description.binding = 0;
+  binding_description.stride = sizeof (vertex_t);
+  binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+  VkVertexInputAttributeDescription position_attribute = { 0 };
+  position_attribute.location = 0;
+  position_attribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+  position_attribute.offset = offsetof(vertex_t, position);
+  VkVertexInputAttributeDescription colour_attribute = { 0 };
+  colour_attribute.location = 1;
+  colour_attribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+  colour_attribute.offset = offsetof(vertex_t, colour);
+  VkVertexInputAttributeDescription attribute_descriptions[] = { position_attribute, colour_attribute };
   VkPipelineVertexInputStateCreateInfo vertex_input_state = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+  vertex_input_state.vertexBindingDescriptionCount = 1;
+  vertex_input_state.pVertexBindingDescriptions = &binding_description;
+  vertex_input_state.vertexAttributeDescriptionCount = ARRAY_COUNT(attribute_descriptions);
+  vertex_input_state.pVertexAttributeDescriptions = attribute_descriptions;
 
   // Input assembly state
   VkPipelineInputAssemblyStateCreateInfo input_assembly_state = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
@@ -835,6 +916,7 @@ void init_vulkan() {
   push_create(create_sync_objects, destroy_sync_objects);
   push_create(create_render_pass, destroy_render_pass);
   push_create(create_shader_modules, destroy_shader_modules);
+  push_create(create_vertex_buffer, destroy_vertex_buffer);
   push_create(create_layouts, destroy_layouts);
   push_create(create_pipeline_cache, destroy_pipeline_cache);
   push_create(create_pipeline, destroy_pipeline);
@@ -946,6 +1028,9 @@ void buffer_commands(uint32_t buffer_index) {
   vkCmdBeginRenderPass(command_buffer, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
   vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_env.pipeline);
+  // Vertex buffer
+  VkDeviceSize offset = 0;
+  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.vertex_buffer.buffer, &offset);
   // Viewport
   VkViewport viewport = { 0 };
   float viewport_dimension;
@@ -969,7 +1054,7 @@ void buffer_commands(uint32_t buffer_index) {
     { vk_env.window->width, vk_env.window->height } // extent
   };
   vkCmdSetScissor(command_buffer, 0, 1, &scissor);
-  vkCmdDraw(command_buffer, 3, 1, 0, 0);
+  vkCmdDraw(command_buffer, ARRAY_COUNT(rect), 1, 0, 0);
 
   // Note that ending the renderpass changes the image's layout from
   // COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
