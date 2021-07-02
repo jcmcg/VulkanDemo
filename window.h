@@ -20,6 +20,7 @@ typedef struct window_s {
   void (*on_create)();
   void (*on_destroy)();
   void (*on_size)();
+  void (*on_paint)();
 } window_t;
 
 WIN_ERROR create_window(window_t *);

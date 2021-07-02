@@ -633,6 +633,7 @@ void create_swapchain() {
     // Object 0 : handle = 0x1ddce66c638, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0xb6981526 |
     // vkCreateFramebuffer() : Requested VkFramebufferCreateInfo width must be greater than zero.
   }
+  vk_env.frame_index = 0;
   LOG_DEBUG_INFO("Created %d swapchain images, views and framebuffers", vk_env.gpu.num_buffers);
 
   LOG_DEBUG_INFO("End create_swapchain()");
@@ -691,4 +692,101 @@ void resize() {
   if (!vk_env.initialized)
     return;
   create_swapchain();
+}
+
+VkResult handle_swapchain_result(VkResult ve) {
+  switch (ve) {
+    case VK_ERROR_OUT_OF_DATE_KHR:
+      // Window was resized
+      resize();
+      break;
+    case VK_SUCCESS:
+      // Swapchain is all good
+    case VK_SUBOPTIMAL_KHR:
+      // Swapchain is in suboptimal state but still able to present the image
+      return VE_OK;
+    case VK_ERROR_SURFACE_LOST_KHR:
+      vkDestroySurfaceKHR(vk_env.instance, vk_env.surface, NULL);
+      create_surface();
+      resize();
+      break;
+#ifdef _DEBUG
+    default:
+      LOG_VK_ERROR(vkAcquireNextImageKHR, ve);
+#endif
+  }
+  return ve;
+}
+
+void begin_render() {
+  // Ensure no more than FRAME_LAG renderings are outstanding
+  vkWaitForFences(vk_env.device, 1, &vk_env.fences[vk_env.frame_index], VK_TRUE, UINT64_MAX);
+  vkResetFences(vk_env.device, 1, &vk_env.fences[vk_env.frame_index]);
+
+  // Get index of next available swapchain image
+  while (handle_swapchain_result(vkAcquireNextImageKHR(
+    vk_env.device, vk_env.swapchain, UINT64_MAX,
+    vk_env.image_acquired_semaphores[vk_env.frame_index],
+    VK_NULL_HANDLE, &vk_env.current_buffer)
+  ));
+}
+
+void end_render() {
+  // Wait for image acquired semaphore to be signaled
+  // Then submit image to graphics queue
+  VkPipelineStageFlags pipeline_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  VkSubmitInfo submit_info = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+  submit_info.waitSemaphoreCount = 1;
+  submit_info.pWaitSemaphores = &vk_env.image_acquired_semaphores[vk_env.frame_index];
+  submit_info.pWaitDstStageMask = &pipeline_stage_mask;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &vk_env.command_buffers[vk_env.current_buffer];
+  submit_info.signalSemaphoreCount = 1;
+  submit_info.pSignalSemaphores = &vk_env.draw_complete_semaphores[vk_env.frame_index];
+  VK_CALL(vkQueueSubmit(vk_env.graphics_queue, 1, &submit_info, vk_env.fences[vk_env.frame_index]));
+
+  // Wait for draw complete (or image ownership)
+  VkPresentInfoKHR present_info = { VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
+  present_info.waitSemaphoreCount = 1;
+  present_info.pWaitSemaphores = vk_env.distinct_qfi
+                               ? &vk_env.image_ownership_semaphores[vk_env.frame_index]
+                               : &vk_env.draw_complete_semaphores[vk_env.frame_index];
+  present_info.swapchainCount = 1;
+  present_info.pSwapchains = &vk_env.swapchain;
+  present_info.pImageIndices = &vk_env.current_buffer;
+  handle_swapchain_result(vkQueuePresentKHR(vk_env.present_queue, &present_info));
+  vk_env.frame_index = (vk_env.frame_index + 1) % vk_env.frame_lag;
+}
+
+void buffer_commands(uint32_t buffer_index) {
+  VkCommandBufferBeginInfo cmd_begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+  cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+  VkCommandBuffer command_buffer = vk_env.command_buffers[buffer_index];
+  vkResetCommandBuffer(command_buffer, 0);
+  VK_CALL(vkBeginCommandBuffer(command_buffer, &cmd_begin_info));
+
+  VkRenderPassBeginInfo rp_begin_info = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+  rp_begin_info.renderPass = vk_env.render_pass;
+  rp_begin_info.framebuffer = vk_env.framebuffers[buffer_index];
+  rp_begin_info.renderArea.extent.width = vk_env.window->width;
+  rp_begin_info.renderArea.extent.height = vk_env.window->height;
+  const VkClearValue clear_values[] = {
+    { { 0.0f, 0.0f, 0.1f, 1.0f } } // color
+  };
+  rp_begin_info.clearValueCount = ARRAY_COUNT(clear_values);
+  rp_begin_info.pClearValues = clear_values;
+  vkCmdBeginRenderPass(command_buffer, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+  // Note that ending the renderpass changes the image's layout from
+  // COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+  vkCmdEndRenderPass(command_buffer);
+  VK_CALL(vkEndCommandBuffer(command_buffer));
+}
+
+void render() {
+  if (vk_env.window->minimized)
+    return;
+  begin_render(vk_env);
+  buffer_commands(vk_env.current_buffer);
+  end_render(vk_env);
 }

@@ -130,6 +130,8 @@ typedef struct vk_env_s {
   VkImage *swapchain_images;
   VkImageView *swapchain_views;
   VkFramebuffer *framebuffers;
+  uint32_t frame_index;
+  uint32_t current_buffer;
 } vk_env_t;
 
 vk_env_t vk_env;
@@ -137,3 +139,4 @@ vk_env_t vk_env;
 void init_vulkan();
 void cleanup_vulkan();
 void resize();
+void render();

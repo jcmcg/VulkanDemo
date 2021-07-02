@@ -25,6 +25,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       return 1;
     case WM_PAINT:
       ValidateRect(hWnd, NULL);
+      window->on_paint();
       break;
     case WM_SIZE:
       window->width = LOWORD(lParam);
