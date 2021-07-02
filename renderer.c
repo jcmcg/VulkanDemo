@@ -678,8 +678,24 @@ void destroy_uniform_buffer() {
 }
 
 void create_layouts() {
+  // Descriptor set layout
+  VkDescriptorSetLayoutBinding ubo_binding = { 0 };
+  ubo_binding.binding = 0;
+  ubo_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  ubo_binding.descriptorCount = 1;
+  ubo_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+  VkDescriptorSetLayoutBinding bindings[] = { ubo_binding };
+
+  VkDescriptorSetLayoutCreateInfo descriptor_set_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+  descriptor_set_info.bindingCount = ARRAY_COUNT(bindings);
+  descriptor_set_info.pBindings = bindings;
+  VK_CALL(vkCreateDescriptorSetLayout(vk_env.device, &descriptor_set_info, NULL, &vk_env.descriptor_set_layout));
+  LOG_DEBUG_INFO("Created descriptor set layout");
+
   // Pipeline layout
   VkPipelineLayoutCreateInfo pipeline_layout_info = { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+  pipeline_layout_info.setLayoutCount = 1;
+  pipeline_layout_info.pSetLayouts = &vk_env.descriptor_set_layout;
   VK_CALL(vkCreatePipelineLayout(vk_env.device, &pipeline_layout_info, NULL, &vk_env.pipeline_layout));
   LOG_DEBUG_INFO("Created pipeline layout");
 }
@@ -687,6 +703,54 @@ void create_layouts() {
 void destroy_layouts() {
   vkDestroyPipelineLayout(vk_env.device, vk_env.pipeline_layout, NULL);
   LOG_DEBUG_INFO("Destroyed pipeline layout");
+}
+
+void create_descriptor_pool() {
+  const VkDescriptorPoolSize pool_sizes[] = {
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
+  };
+  VkDescriptorPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+  create_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+  create_info.maxSets = vk_env.gpu.num_buffers;
+  create_info.poolSizeCount = ARRAY_COUNT(pool_sizes);
+  create_info.pPoolSizes = pool_sizes;
+  VK_CALL(vkCreateDescriptorPool(vk_env.device, &create_info, NULL, &vk_env.descriptor_pool));
+
+  LOG_DEBUG_INFO("Created descriptor pool");
+}
+
+void destroy_descriptor_pool() {
+  vkDestroyDescriptorPool(vk_env.device, vk_env.descriptor_pool, NULL);
+  LOG_DEBUG_INFO("Destroyed descriptor pool");
+}
+
+void alloc_descriptor_sets() {
+  VkDescriptorSetAllocateInfo allocate_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+  allocate_info.descriptorPool = vk_env.descriptor_pool;
+  allocate_info.descriptorSetCount = 1;
+  allocate_info.pSetLayouts = &vk_env.descriptor_set_layout;
+  VkDescriptorBufferInfo buffer_info = { 0 };
+  buffer_info.buffer = vk_env.mvp_ub.buffer;
+  buffer_info.range = sizeof mvp;
+  VkWriteDescriptorSet writes[] = {
+    { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET }
+  };
+  writes[0].descriptorCount = 1;
+  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  writes[0].pBufferInfo = &buffer_info;
+  vk_env.descriptor_sets = halloc_type(VkDescriptorSet, vk_env.gpu.num_buffers);
+  for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
+    VK_CALL(vkAllocateDescriptorSets(vk_env.device, &allocate_info, &vk_env.descriptor_sets[i]));
+    writes[0].dstSet = vk_env.descriptor_sets[i];
+    vkUpdateDescriptorSets(vk_env.device, ARRAY_COUNT(writes), writes, 0, NULL);
+  }
+  LOG_DEBUG_INFO("Allocated %d uniform buffer descriptor sets", vk_env.gpu.num_buffers);
+}
+
+void free_descriptor_sets() {
+  VK_CALL(vkFreeDescriptorSets(vk_env.device, vk_env.descriptor_pool, vk_env.gpu.num_buffers, vk_env.descriptor_sets));
+  hfree(vk_env.descriptor_sets);
+  LOG_DEBUG_INFO("Freed %d uniform buffer descriptor sets", vk_env.gpu.num_buffers);
 }
 
 void create_pipeline_cache() {
@@ -962,6 +1026,8 @@ void init_vulkan() {
   push_create(create_vertex_buffer, destroy_vertex_buffer);
   push_create(create_uniform_buffer, destroy_uniform_buffer);
   push_create(create_layouts, destroy_layouts);
+  push_create(create_descriptor_pool, destroy_descriptor_pool);
+  push_create(alloc_descriptor_sets, free_descriptor_sets);
   push_create(create_pipeline_cache, destroy_pipeline_cache);
   push_create(create_pipeline, destroy_pipeline);
   push_create(NULL, destroy_swapchain_final);
@@ -1075,6 +1141,10 @@ void buffer_commands(uint32_t buffer_index) {
   // Vertex buffer
   VkDeviceSize offset = 0;
   vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.rect_vb.buffer, &offset);
+  // Uniform buffer
+  vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          vk_env.pipeline_layout, 0, 1,
+                          &vk_env.descriptor_sets[buffer_index], 0, NULL);
   // Viewport
   VkViewport viewport = { 0 };
   float viewport_dimension;

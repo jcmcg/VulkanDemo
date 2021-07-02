@@ -143,6 +143,9 @@ typedef struct vk_env_s {
   VkRenderPass render_pass;
   VkShaderModule vertex_shader;
   VkShaderModule fragment_shader;
+  VkDescriptorPool descriptor_pool;
+  VkDescriptorSet *descriptor_sets;
+  VkDescriptorSetLayout descriptor_set_layout;
   VkPipelineLayout pipeline_layout;
   VkPipelineCache pipeline_cache;
   VkPipeline pipeline;
