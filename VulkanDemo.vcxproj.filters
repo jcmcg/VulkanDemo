@@ -14,6 +14,11 @@
     <ClInclude Include="window.h" />
   </ItemGroup>
   <ItemGroup>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{60224913-68b8-46e3-9c12-e791db2e9f42}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
     <None Include="shaders\compile-shaders.bat">
       <Filter>shaders</Filter>
     </None>
@@ -23,10 +28,5 @@
     <None Include="shaders\glsl\shader.vert.glsl">
       <Filter>shaders</Filter>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Filter Include="shaders">
-      <UniqueIdentifier>{c5357927-8870-49cd-92d5-2dd237219b98}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
 </Project>

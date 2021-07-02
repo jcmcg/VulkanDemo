@@ -945,6 +945,32 @@ void buffer_commands(uint32_t buffer_index) {
   rp_begin_info.pClearValues = clear_values;
   vkCmdBeginRenderPass(command_buffer, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
+  vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_env.pipeline);
+  // Viewport
+  VkViewport viewport = { 0 };
+  float viewport_dimension;
+  if (vk_env.window->width > vk_env.window->height) {
+    viewport_dimension = (float)vk_env.window->height;
+    viewport.x = (vk_env.window->width - vk_env.window->height) / 2.0f;
+  }
+  else {
+    viewport_dimension = (float)vk_env.window->width;
+    viewport.y = (vk_env.window->height - vk_env.window->width) / 2.0f;
+  }
+  viewport.width = viewport_dimension;
+  viewport.height = -viewport_dimension;
+  viewport.y += viewport_dimension;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+  vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+  // Scissor
+  const VkRect2D scissor = {
+    { 0, 0 }, // offset
+    { vk_env.window->width, vk_env.window->height } // extent
+  };
+  vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+  vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
   // Note that ending the renderpass changes the image's layout from
   // COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
   vkCmdEndRenderPass(command_buffer);
