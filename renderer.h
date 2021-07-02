@@ -7,6 +7,8 @@
 #define APP_VERSION VK_MAKE_VERSION(1, 0, 0)
 #define ENGINE_NAME "TestEngine"
 #define ENGINE_VERSION VK_MAKE_VERSION(1, 0, 0)
+#define SHADER_NAME "shader"
+#define SHADER_ENTRY_POINT_NAME "main"
 
 #define ARRAY_COUNT(a) (sizeof (a) / sizeof (a[0]))
 #define CLAMP(V, MIN, MAX) if (V < MIN) V = MIN; else if (MAX && V > MAX) V = MAX
@@ -64,6 +66,8 @@ typedef enum {
   VE_INSTANCE_EXTENSION_UNAVAILABLE,
   VE_NO_PHYSICAL_DEVICES,
   VE_NO_SUPPORTED_PHYSICAL_DEVICE,
+  VE_SHADER_FILE_OPEN,
+  VE_SHADER_FILE_READ,
   VE_NO_SURFACE_FORMATS,
   VE_NO_SUITABLE_SURFACE_FORMAT,
   VE_NO_PRESENT_MODES,
@@ -126,6 +130,8 @@ typedef struct vk_env_s {
   VkSemaphore *draw_complete_semaphores;
   uint32_t frame_lag;
   VkRenderPass render_pass;
+  VkShaderModule vertex_shader;
+  VkShaderModule fragment_shader;
   VkSwapchainKHR swapchain;
   VkImage *swapchain_images;
   VkImageView *swapchain_views;

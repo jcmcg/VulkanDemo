@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "renderer.h"
 #include "window.h"
 #include "log.h"
@@ -7,10 +8,14 @@ vk_env_t vk_env = { VE_OK };
 
 const char *VK_ERRORS[] = {
   "OK",
-  "No validation layers available",
-  "Required validation layer unavailable",
+  "No instance layers available",
+  "Required instance layer unavailable",
   "No instance extensions available",
-  "Required instance extension unavailable"
+  "Required instance extension unavailable",
+  "No physical devices available",
+  "No physical device with rasterization support available",
+  "Could not open shader file",
+  "Could not read shader file"
 };
 
 #ifdef _DEBUG
@@ -509,6 +514,62 @@ void destroy_render_pass() {
   LOG_DEBUG_INFO("Destroyed render pass");
 }
 
+VULKAN_ERROR create_shader_module(const char *stage) {
+  char path[64];
+  snprintf(path, 64, "shaders\\spv\\%s.%s.spv", SHADER_NAME, stage);
+  LOG_DEBUG_INFO("Loading shader '%s'...", path);
+
+  FILE *fp;
+  if (fopen_s(&fp, path, "rb"))
+    return VE_SHADER_FILE_OPEN;
+  long length = -1;
+  if (!fseek(fp, 0, SEEK_END)) {
+    length = ftell(fp);
+    rewind(fp);
+  }
+  VULKAN_ERROR ve = VE_OK;
+  uint32_t *code = NULL;
+  if (length <= 0 || (length % 4))
+    ve = VE_SHADER_FILE_READ;
+  else {
+    code = (uint32_t *)halloc(length);
+    if (fread(code, length, 1, fp) != 1)
+      ve = VE_SHADER_FILE_READ;
+  }
+  fclose(fp);
+
+  if (code) {
+    if (!ve) {
+      VkShaderModuleCreateInfo shader_info = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+      shader_info.codeSize = (size_t)length;
+      shader_info.pCode = code;
+      VK_CALL(vkCreateShaderModule(
+        vk_env.device, &shader_info, NULL,
+        *stage == 'v' ? &vk_env.vertex_shader : &vk_env.fragment_shader
+      ));
+      LOG_DEBUG_INFO("Created shader module: %s.%s", SHADER_NAME, stage);
+    }
+    hfree(code);
+  }
+
+  return ve;
+}
+
+void destroy_shader_module(const char *stage) {
+  vkDestroyShaderModule(vk_env.device, *stage == 'v' ? vk_env.vertex_shader : vk_env.fragment_shader, NULL);
+  LOG_DEBUG_INFO("Destroyed shader module: %s.%s", SHADER_NAME, stage);
+}
+
+void create_shader_modules() {
+  (vk_env.error = create_shader_module("vert")) ||
+  (vk_env.error = create_shader_module("frag"));
+}
+
+void destroy_shader_modules() {
+  destroy_shader_module("vert");
+  destroy_shader_module("frag");
+}
+
 void destroy_swapchain(VkSwapchainKHR swapchain) {
   VK_CALL(vkDeviceWaitIdle(vk_env.device));
   for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
@@ -670,6 +731,7 @@ void init_vulkan() {
   push_create(create_command_buffers, destroy_command_buffers);
   push_create(create_sync_objects, destroy_sync_objects);
   push_create(create_render_pass, destroy_render_pass);
+  push_create(create_shader_modules, destroy_shader_modules);
   push_create(NULL, destroy_swapchain_final);
 
   vk_env.initialized = true;
