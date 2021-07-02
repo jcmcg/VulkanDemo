@@ -593,6 +593,86 @@ void destroy_pipeline_cache() {
   LOG_DEBUG_INFO("Destroyed pipeline cache");
 }
 
+void create_pipeline() {
+  LOG_DEBUG_INFO("Begin create_pipeline()");
+
+  // Shader stages
+  VkPipelineShaderStageCreateInfo shader_stages[] = {
+    { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO },
+    { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO }
+  };
+  shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+  shader_stages[0].module = vk_env.vertex_shader;
+  shader_stages[0].pName = SHADER_ENTRY_POINT_NAME;
+  shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  shader_stages[1].module = vk_env.fragment_shader;
+  shader_stages[1].pName = SHADER_ENTRY_POINT_NAME;
+
+  // Vertex input state
+  VkPipelineVertexInputStateCreateInfo vertex_input_state = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+
+  // Input assembly state
+  VkPipelineInputAssemblyStateCreateInfo input_assembly_state = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+  input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+  // Viewport state (dynamic)
+  VkPipelineViewportStateCreateInfo viewport_state = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
+  viewport_state.viewportCount = 1;
+  viewport_state.scissorCount = 1;
+
+  // Rasterization state
+  VkPipelineRasterizationStateCreateInfo rasterization_state = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+  rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
+  rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT;
+  rasterization_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+  rasterization_state.depthBiasEnable = VK_FALSE;
+  rasterization_state.lineWidth = 1.0f;
+
+  // Multisample state
+  VkPipelineMultisampleStateCreateInfo multisample_state = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+  multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; // vkcontext.sampleCount
+
+  // Colour blending
+  VkPipelineColorBlendAttachmentState colour_blend_attachment_state = { 0 };
+  colour_blend_attachment_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                                 VK_COLOR_COMPONENT_G_BIT |
+                                                 VK_COLOR_COMPONENT_B_BIT |
+                                                 VK_COLOR_COMPONENT_A_BIT;
+  VkPipelineColorBlendStateCreateInfo colour_blend_state = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+  colour_blend_state.attachmentCount = 1;
+  colour_blend_state.pAttachments = &colour_blend_attachment_state;
+
+  // Dynamic states
+  const VkDynamicState dynamic_states[] = {
+    VK_DYNAMIC_STATE_VIEWPORT,
+    VK_DYNAMIC_STATE_SCISSOR
+  };
+  VkPipelineDynamicStateCreateInfo dynamic_state = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+  dynamic_state.dynamicStateCount = ARRAY_COUNT(dynamic_states);
+  dynamic_state.pDynamicStates = dynamic_states;
+
+  VkGraphicsPipelineCreateInfo create_info = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+  create_info.stageCount = ARRAY_COUNT(shader_stages);
+  create_info.pStages = shader_stages;
+  create_info.pVertexInputState = &vertex_input_state;
+  create_info.pInputAssemblyState = &input_assembly_state;
+  create_info.pViewportState = &viewport_state;
+  create_info.pRasterizationState = &rasterization_state;
+  create_info.pMultisampleState = &multisample_state;
+  create_info.pColorBlendState = &colour_blend_state;
+  create_info.pDynamicState = &dynamic_state;
+  create_info.layout = vk_env.pipeline_layout;
+  create_info.renderPass = vk_env.render_pass;
+  VK_CALL(vkCreateGraphicsPipelines(vk_env.device, vk_env.pipeline_cache, 1, &create_info, NULL, &vk_env.pipeline));
+
+  LOG_DEBUG_INFO("End create_pipeline()");
+}
+
+void destroy_pipeline() {
+  vkDestroyPipeline(vk_env.device, vk_env.pipeline, NULL);
+  LOG_DEBUG_INFO("Destroyed pipeline");
+}
+
 void destroy_swapchain(VkSwapchainKHR swapchain) {
   VK_CALL(vkDeviceWaitIdle(vk_env.device));
   for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
@@ -757,6 +837,7 @@ void init_vulkan() {
   push_create(create_shader_modules, destroy_shader_modules);
   push_create(create_layouts, destroy_layouts);
   push_create(create_pipeline_cache, destroy_pipeline_cache);
+  push_create(create_pipeline, destroy_pipeline);
   push_create(NULL, destroy_swapchain_final);
 
   vk_env.initialized = true;

@@ -134,6 +134,7 @@ typedef struct vk_env_s {
   VkShaderModule fragment_shader;
   VkPipelineLayout pipeline_layout;
   VkPipelineCache pipeline_cache;
+  VkPipeline pipeline;
   VkSwapchainKHR swapchain;
   VkImage *swapchain_images;
   VkImageView *swapchain_views;
