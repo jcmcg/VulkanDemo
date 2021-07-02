@@ -10,6 +10,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
   window.height = 768;
   window.on_create = init_vulkan;
   window.on_destroy = cleanup_vulkan;
+  window.on_size = resize;
   vk_env.window = &window;
 
   if (create_window(&window) == WE_OK) {
@@ -24,6 +25,5 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
   }
   cleanup_window(&window);
 
-  LOG_DEBUG_INFO("Returning %d", rc);
   return rc;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <stdbool.h>
 
 #define WIN_NAME "VulkanDemo"
 
@@ -15,8 +16,10 @@ typedef struct window_s {
   HWND hwnd;
   WORD width;
   WORD height;
+  bool minimized;
   void (*on_create)();
   void (*on_destroy)();
+  void (*on_size)();
 } window_t;
 
 WIN_ERROR create_window(window_t *);

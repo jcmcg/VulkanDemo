@@ -29,6 +29,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     case WM_SIZE:
       window->width = LOWORD(lParam);
       window->height = HIWORD(lParam);
+      window->on_size();
       break;
     case WM_KEYDOWN:
       switch (wParam) {
