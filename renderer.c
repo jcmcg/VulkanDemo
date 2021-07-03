@@ -689,7 +689,7 @@ void destroy_uniform_buffer() {
 VkResult create_image(VkDevice device, VkFormat format,
                       uint32_t width, uint32_t height,
                       VkImageTiling tiling, VkImageUsageFlags usage,
-                      VkImageLayout init_layout, VkImage *image) {
+                      VkImage *image) {
   VkImageCreateInfo create_info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
   create_info.imageType = VK_IMAGE_TYPE_2D;
   create_info.format = format;
@@ -701,7 +701,7 @@ VkResult create_image(VkDevice device, VkFormat format,
   create_info.samples = VK_SAMPLE_COUNT_1_BIT;
   create_info.tiling = tiling;
   create_info.usage = usage;
-  create_info.initialLayout = init_layout; //VK_IMAGE_LAYOUT_UNDEFINED;
+  create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   return vkCreateImage(device, &create_info, NULL, image);
 }
 
@@ -726,7 +726,6 @@ void create_texture() {
     vk_env.image->height,
     VK_IMAGE_TILING_LINEAR,
     VK_IMAGE_USAGE_SAMPLED_BIT,
-    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     &vk_env.texture.image
   ));
   LOG_DEBUG_INFO("Created texture image");
@@ -1146,6 +1145,117 @@ void destroy_swapchain_final() {
   LOG_DEBUG_INFO("Destroyed swapchain");
 }
 
+void buffer_commands(VkCommandBuffer command_buffer, VkFramebuffer framebuffer, VkDescriptorSet *descriptor_set) {
+  VkCommandBufferBeginInfo cmd_begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+  cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+  vkResetCommandBuffer(command_buffer, 0);
+  VK_CALL(vkBeginCommandBuffer(command_buffer, &cmd_begin_info));
+
+  VkRenderPassBeginInfo rp_begin_info = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
+  rp_begin_info.renderPass = vk_env.render_pass;
+  rp_begin_info.framebuffer = framebuffer;
+  rp_begin_info.renderArea.extent.width = vk_env.window->width;
+  rp_begin_info.renderArea.extent.height = vk_env.window->height;
+  const VkClearValue clear_values[] = {
+    { { 0.0f, 0.0f, 0.1f, 1.0f } } // color
+  };
+  rp_begin_info.clearValueCount = ARRAY_COUNT(clear_values);
+  rp_begin_info.pClearValues = clear_values;
+  vkCmdBeginRenderPass(command_buffer, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+  vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_env.pipeline);
+  // Vertex buffer
+  VkDeviceSize offset = 0;
+  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.rect_vb.buffer, &offset);
+  // Uniform buffer
+  vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          vk_env.pipeline_layout, 0, 1,
+                          descriptor_set, 0, NULL);
+
+  // Viewport
+  VkViewport viewport = { 0 };
+  float viewport_dimension;
+  if (vk_env.window->width > vk_env.window->height) {
+    viewport_dimension = (float)vk_env.window->height;
+    viewport.x = (vk_env.window->width - vk_env.window->height) / 2.0f;
+  }
+  else {
+    viewport_dimension = (float)vk_env.window->width;
+    viewport.y = (vk_env.window->height - vk_env.window->width) / 2.0f;
+  }
+  viewport.width = viewport_dimension;
+  viewport.height = -viewport_dimension;
+  viewport.y += viewport_dimension;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+  vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+  // Scissor
+  const VkRect2D scissor = {
+    { 0, 0 }, // offset
+    { vk_env.window->width, vk_env.window->height } // extent
+  };
+  vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+  vkCmdDraw(command_buffer, ARRAY_COUNT(rect), 1, 0, 0);
+
+  // Note that ending the renderpass changes the image's layout from
+  // COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+  vkCmdEndRenderPass(command_buffer);
+  VK_CALL(vkEndCommandBuffer(command_buffer));
+}
+
+void prepare_command_buffers() {
+  LOG_DEBUG_INFO("Begin prepare_command_buffers()");
+
+  VkCommandBuffer init_cmd_buf; // Buffer for initialization commands
+  VkCommandBufferAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+  alloc_info.commandPool = vk_env.command_pool;
+  alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  alloc_info.commandBufferCount = 1;
+  VK_CALL(vkAllocateCommandBuffers(vk_env.device, &alloc_info, &init_cmd_buf));
+
+  VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+  VK_CALL(vkBeginCommandBuffer(init_cmd_buf, &begin_info));
+
+  VkImageMemoryBarrier image_memory_barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+  image_memory_barrier.srcAccessMask = 0;
+  image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+  image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  image_memory_barrier.image = vk_env.texture.image;
+  image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  image_memory_barrier.subresourceRange.levelCount = 1;
+  image_memory_barrier.subresourceRange.layerCount = 1;
+  vkCmdPipelineBarrier(
+    init_cmd_buf,
+    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    0, 0, NULL, 0, NULL, 1, &image_memory_barrier
+  );
+  vkEndCommandBuffer(init_cmd_buf);
+
+  for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
+    buffer_commands(
+      vk_env.command_buffers[i],
+      vk_env.framebuffers[i],
+      &vk_env.descriptor_sets[i]
+    );
+  }
+
+  VkFence fence;
+  VkFenceCreateInfo fence_info = { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+  VK_CALL(vkCreateFence(vk_env.device, &fence_info, NULL, &fence));
+  VkSubmitInfo submit_info = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &init_cmd_buf;
+  VK_CALL(vkQueueSubmit(vk_env.graphics_queue, 1, &submit_info, fence));
+  VK_CALL(vkWaitForFences(vk_env.device, 1, &fence, VK_TRUE, UINT64_MAX));
+  vkFreeCommandBuffers(vk_env.device, vk_env.command_pool, 1, &init_cmd_buf);
+  vkDestroyFence(vk_env.device, fence, NULL);
+
+  LOG_DEBUG_INFO("End prepare_command_buffers()");
+}
+
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
@@ -1203,6 +1313,7 @@ void resize() {
   if (!vk_env.initialized)
     return;
   create_swapchain();
+  prepare_command_buffers(vk_env);
 }
 
 void move(int x, int y) {
@@ -1274,69 +1385,10 @@ void end_render() {
   vk_env.frame_index = (vk_env.frame_index + 1) % vk_env.frame_lag;
 }
 
-void buffer_commands(uint32_t buffer_index) {
-  VkCommandBufferBeginInfo cmd_begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-  cmd_begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-  VkCommandBuffer command_buffer = vk_env.command_buffers[buffer_index];
-  vkResetCommandBuffer(command_buffer, 0);
-  VK_CALL(vkBeginCommandBuffer(command_buffer, &cmd_begin_info));
-
-  VkRenderPassBeginInfo rp_begin_info = { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO };
-  rp_begin_info.renderPass = vk_env.render_pass;
-  rp_begin_info.framebuffer = vk_env.framebuffers[buffer_index];
-  rp_begin_info.renderArea.extent.width = vk_env.window->width;
-  rp_begin_info.renderArea.extent.height = vk_env.window->height;
-  const VkClearValue clear_values[] = {
-    { { 0.0f, 0.0f, 0.1f, 1.0f } } // color
-  };
-  rp_begin_info.clearValueCount = ARRAY_COUNT(clear_values);
-  rp_begin_info.pClearValues = clear_values;
-  vkCmdBeginRenderPass(command_buffer, &rp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-  vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_env.pipeline);
-  // Vertex buffer
-  VkDeviceSize offset = 0;
-  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.rect_vb.buffer, &offset);
-  // Uniform buffer
-  vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          vk_env.pipeline_layout, 0, 1,
-                          &vk_env.descriptor_sets[buffer_index], 0, NULL);
-  // Viewport
-  VkViewport viewport = { 0 };
-  float viewport_dimension;
-  if (vk_env.window->width > vk_env.window->height) {
-    viewport_dimension = (float)vk_env.window->height;
-    viewport.x = (vk_env.window->width - vk_env.window->height) / 2.0f;
-  }
-  else {
-    viewport_dimension = (float)vk_env.window->width;
-    viewport.y = (vk_env.window->height - vk_env.window->width) / 2.0f;
-  }
-  viewport.width = viewport_dimension;
-  viewport.height = -viewport_dimension;
-  viewport.y += viewport_dimension;
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(command_buffer, 0, 1, &viewport);
-  // Scissor
-  const VkRect2D scissor = {
-    { 0, 0 }, // offset
-    { vk_env.window->width, vk_env.window->height } // extent
-  };
-  vkCmdSetScissor(command_buffer, 0, 1, &scissor);
-  vkCmdDraw(command_buffer, ARRAY_COUNT(rect), 1, 0, 0);
-
-  // Note that ending the renderpass changes the image's layout from
-  // COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-  vkCmdEndRenderPass(command_buffer);
-  VK_CALL(vkEndCommandBuffer(command_buffer));
-}
-
 void render() {
   if (vk_env.window->minimized)
     return;
   begin_render(vk_env);
   memcpy(vk_env.mvp_ub.mem_ptr, mvp, sizeof mvp);
-  buffer_commands(vk_env.current_buffer);
   end_render(vk_env);
 }
