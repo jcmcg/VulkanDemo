@@ -168,7 +168,9 @@ void create_instance() {
   instance_create_info.enabledExtensionCount = instance_extension_count;
   instance_create_info.ppEnabledExtensionNames = instance_extensions;
   VK_CALL(vkCreateInstance(&instance_create_info, NULL, &vk_env.instance));
+#ifdef _DEBUG
   VK_CALL_EXT(vkCreateDebugUtilsMessengerEXT, vk_env.instance, &debug_messenger_create_info, NULL, &vk_env.debug_messenger);
+#endif
 
   LOG_DEBUG_INFO("End create_instance()");
 }
@@ -294,6 +296,28 @@ VULKAN_ERROR select_texture_format(VkPhysicalDevice physical_device, VkFormat *t
   return VE_NO_SUITABLE_TEXTURE_FORMAT;
 }
 
+VULKAN_ERROR select_depth_format(VkPhysicalDevice physical_device, VkFormat *depth_format) {
+  const VkFormat formats[] = {
+    // Need stencil bits, so choose one of these two
+    VK_FORMAT_D32_SFLOAT_S8_UINT,
+    VK_FORMAT_D24_UNORM_S8_UINT
+  };
+  const uint32_t num_formats = ARRAY_COUNT(formats);
+  VkFormatProperties format_properties;
+
+  for (uint32_t i = 0; i < num_formats; i++) {
+    vkGetPhysicalDeviceFormatProperties(physical_device, formats[i], &format_properties);
+    if (FLAGGED(format_properties.linearTilingFeatures |
+                format_properties.optimalTilingFeatures,
+                VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)) {
+      *depth_format = formats[i];
+      LOG_DEBUG_INFO("Selected depth format: %d", formats[i]);
+      return VE_OK;
+    }
+  }
+  return VE_NO_SUITABLE_DEPTH_FORMAT;
+}
+
 VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
   LOG_DEBUG_INFO("Begin select_physical_device()");
 
@@ -352,7 +376,8 @@ VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
     if (select_surface_format(physical_devices[i], vk_env.surface, &gpus[i].surface_format) ||
         !set_num_buffers(physical_devices[i], vk_env.surface, &gpus[i], num_buffers) ||
         select_present_mode(physical_devices[i], vk_env.surface, &gpus[i].present_mode) ||
-        select_texture_format(physical_devices[i], &gpus[i].texture_format))
+        select_texture_format(physical_devices[i], &gpus[i].texture_format) ||
+        select_depth_format(physical_devices[i], &gpus[i].depth_format))
       continue;
 
     vkGetPhysicalDeviceFeatures(physical_devices[i], &features);
@@ -503,16 +528,15 @@ void destroy_sync_objects() {
 void create_render_pass() {
   LOG_DEBUG_INFO("Begin create_render_pass()");
 
-  VkAttachmentDescription attachments[1] = { 0 }; // colour attachment
-  VkAttachmentDescription *colour_desc = &attachments[0];
-  colour_desc->format = vk_env.gpu.surface_format.format;
-  colour_desc->samples = VK_SAMPLE_COUNT_1_BIT;
-  colour_desc->loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  colour_desc->storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  colour_desc->stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-  colour_desc->stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  colour_desc->initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  colour_desc->finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  VkAttachmentDescription colour_desc = { 0 };
+  colour_desc.format = vk_env.gpu.surface_format.format;
+  colour_desc.samples = VK_SAMPLE_COUNT_1_BIT;
+  colour_desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  colour_desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  colour_desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  colour_desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  colour_desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  colour_desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
   // https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples
   // The image will automatically be transitioned from
   // VK_IMAGE_LAYOUT_UNDEFINED to VK_COLOR_ATTACHMENT_OPTIMAL for rendering,
@@ -522,12 +546,28 @@ void create_render_pass() {
     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL // layout
   };
 
+  VkAttachmentDescription depth_desc = { 0 };
+  depth_desc.format = vk_env.gpu.depth_format;
+  depth_desc.samples = VK_SAMPLE_COUNT_1_BIT;
+  depth_desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  depth_desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  depth_desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  depth_desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  depth_desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  depth_desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+  const VkAttachmentReference depth_attachment = {
+    1, // attachment
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL // layout
+  };
+  VkAttachmentDescription attachments[] = { colour_desc, depth_desc };
+
   VkSubpassDescription subpass = { 0 };
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments = &colour_attachment;
+  subpass.pDepthStencilAttachment = &depth_attachment;
   VkRenderPassCreateInfo create_info = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
-  create_info.attachmentCount = 1;
+  create_info.attachmentCount = ARRAY_COUNT(attachments);
   create_info.pAttachments = attachments;
   create_info.subpassCount = 1;
   create_info.pSubpasses = &subpass;
@@ -804,6 +844,54 @@ void destroy_texture() {
   LOG_DEBUG_INFO("End destroy_texture()");
 }
 
+void create_depth_buffer() {
+  LOG_DEBUG_INFO("Begin create_depth_buffer()");
+
+  VK_CALL(create_image(
+    vk_env.device,
+    vk_env.gpu.depth_format,
+    vk_env.window->width,
+    vk_env.window->height,
+    VK_IMAGE_TILING_OPTIMAL,
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    &vk_env.depth_buffer.image
+  ));
+  LOG_DEBUG_INFO("Created depth buffer image");
+
+  VkMemoryRequirements memory_requirements;
+  vkGetImageMemoryRequirements(vk_env.device, vk_env.depth_buffer.image, &memory_requirements); // 1665 = 11010000001 // size = 8847360, alignment = 32
+  alloc_device_memory(
+    memory_requirements,
+    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    &vk_env.depth_buffer.device_memory
+  );
+  VK_CALL(vkBindImageMemory(vk_env.device, vk_env.depth_buffer.image, vk_env.depth_buffer.device_memory, 0));
+
+  VK_CALL(create_image_view(
+    vk_env.device,
+    vk_env.depth_buffer.image,
+    vk_env.gpu.depth_format,
+    VK_IMAGE_ASPECT_DEPTH_BIT,
+    &vk_env.depth_buffer.view
+  ));
+  LOG_DEBUG_INFO("Created depth buffer image view");
+
+  LOG_DEBUG_INFO("End create_depth_buffer()");
+}
+
+void destroy_depth_buffer() {
+  LOG_DEBUG_INFO("Begin destroy_depth_buffer()");
+
+  vkDestroyImageView(vk_env.device, vk_env.depth_buffer.view, NULL);
+  LOG_DEBUG_INFO("Destroyed depth buffer image view");
+  vkFreeMemory(vk_env.device, vk_env.depth_buffer.device_memory, NULL);
+  LOG_DEBUG_INFO("Freed depth buffer device memory");
+  vkDestroyImage(vk_env.device, vk_env.depth_buffer.image, NULL);
+  LOG_DEBUG_INFO("Destroyed depth buffer image");
+
+  LOG_DEBUG_INFO("End destroy_depth_buffer()");
+}
+
 void create_layouts() {
   // Descriptor set layout
   VkDescriptorSetLayoutBinding ubo_binding = { 0 };
@@ -967,7 +1055,25 @@ void create_pipeline() {
 
   // Multisample state
   VkPipelineMultisampleStateCreateInfo multisample_state = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-  multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; // vkcontext.sampleCount
+  multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+  // Depth stencil
+  VkPipelineDepthStencilStateCreateInfo depth_stencil_state = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+  depth_stencil_state.depthTestEnable = VK_TRUE;
+  depth_stencil_state.depthWriteEnable = VK_TRUE;
+  depth_stencil_state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+  depth_stencil_state.depthBoundsTestEnable = VK_FALSE;
+  depth_stencil_state.stencilTestEnable = VK_FALSE;
+  depth_stencil_state.front.failOp = VK_STENCIL_OP_KEEP;
+  depth_stencil_state.front.passOp = VK_STENCIL_OP_KEEP;
+  depth_stencil_state.front.depthFailOp = VK_STENCIL_OP_KEEP;
+  depth_stencil_state.front.compareOp = VK_COMPARE_OP_ALWAYS;
+  depth_stencil_state.front.compareMask = 0;
+  depth_stencil_state.front.writeMask = UINT32_MAX; // 0xffffffff;
+  depth_stencil_state.front.reference = 0;
+  depth_stencil_state.back = depth_stencil_state.front;
+  depth_stencil_state.minDepthBounds = 0.0f;
+  depth_stencil_state.maxDepthBounds = 1.0f;
 
   // Colour blending
   VkPipelineColorBlendAttachmentState colour_blend_attachment_state = { 0 };
@@ -996,6 +1102,7 @@ void create_pipeline() {
   create_info.pViewportState = &viewport_state;
   create_info.pRasterizationState = &rasterization_state;
   create_info.pMultisampleState = &multisample_state;
+  create_info.pDepthStencilState = &depth_stencil_state;
   create_info.pColorBlendState = &colour_blend_state;
   create_info.pDynamicState = &dynamic_state;
   create_info.layout = vk_env.pipeline_layout;
@@ -1011,7 +1118,6 @@ void destroy_pipeline() {
 }
 
 void destroy_swapchain(VkSwapchainKHR swapchain) {
-  VK_CALL(vkDeviceWaitIdle(vk_env.device));
   for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
     vkDestroyFramebuffer(vk_env.device, vk_env.framebuffers[i], NULL);
     vkDestroyImageView(vk_env.device, vk_env.swapchain_views[i], NULL);
@@ -1112,10 +1218,10 @@ void create_swapchain() {
   vk_env.swapchain_views = halloc_type(VkImageView, vk_env.gpu.num_buffers);
   vk_env.framebuffers = halloc_type(VkFramebuffer, vk_env.gpu.num_buffers);
 
-  VkImageView attachments[1] = { VK_NULL_HANDLE };
+  VkImageView attachments[] = { VK_NULL_HANDLE, vk_env.depth_buffer.view };
   VkFramebufferCreateInfo create_info = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
   create_info.renderPass = vk_env.render_pass;
-  create_info.attachmentCount = 1;
+  create_info.attachmentCount = ARRAY_COUNT(attachments);
   create_info.pAttachments = attachments;
   create_info.width = vk_env.window->width;
   create_info.height = vk_env.window->height;
@@ -1157,7 +1263,8 @@ void buffer_commands(VkCommandBuffer command_buffer, VkFramebuffer framebuffer, 
   rp_begin_info.renderArea.extent.width = vk_env.window->width;
   rp_begin_info.renderArea.extent.height = vk_env.window->height;
   const VkClearValue clear_values[] = {
-    { { 0.0f, 0.0f, 0.1f, 1.0f } } // color
+    { { 0.0f, 0.0f, 0.1f, 1.0f } }, // color
+    { { 1.0f, 0 } } // depthStencil
   };
   rp_begin_info.clearValueCount = ARRAY_COUNT(clear_values);
   rp_begin_info.pClearValues = clear_values;
@@ -1286,6 +1393,7 @@ void init_vulkan() {
   push_create(create_vertex_buffer, destroy_vertex_buffer);
   push_create(create_uniform_buffer, destroy_uniform_buffer);
   push_create(create_texture, destroy_texture);
+  push_create(create_depth_buffer, destroy_depth_buffer);
   push_create(create_layouts, destroy_layouts);
   push_create(create_descriptor_pool, destroy_descriptor_pool);
   push_create(alloc_descriptor_sets, free_descriptor_sets);
@@ -1312,6 +1420,9 @@ void cleanup_vulkan() {
 void resize() {
   if (!vk_env.initialized)
     return;
+  VK_CALL(vkDeviceWaitIdle(vk_env.device));
+  destroy_depth_buffer();
+  create_depth_buffer();
   create_swapchain();
   prepare_command_buffers(vk_env);
 }

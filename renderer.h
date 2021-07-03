@@ -10,6 +10,7 @@
 #define ENGINE_VERSION VK_MAKE_VERSION(1, 0, 0)
 #define SHADER_NAME "shader"
 #define SHADER_ENTRY_POINT_NAME "main"
+#define NUM_BUFFERS 3 // Triple buffering
 
 #define ARRAY_COUNT(a) (sizeof (a) / sizeof (a[0]))
 #define CLAMP(V, MIN, MAX) if (V < MIN) V = MIN; else if (MAX && V > MAX) V = MAX
@@ -56,8 +57,6 @@ void log_vk_error(const char *, long, const char *, VkResult);
 }
 #define VK_CALL_EXT_VOID(f, i, ...) VK_CALL_EXT(f, i, __VA_ARGS__)
 #endif // _DEBUG
-
-#define NUM_BUFFERS 3 // Triple buffering
 
 typedef enum {
   VE_OK,
@@ -126,6 +125,12 @@ typedef struct {
   VkSampler sampler;
 } VkTexture;
 
+typedef struct {
+  VkImage image;
+  VkImageView view;
+  VkDeviceMemory device_memory;
+} VkDepthBuffer;
+
 typedef struct vk_env_s {
   VULKAN_ERROR error;
   bool initialized;
@@ -167,6 +172,7 @@ typedef struct vk_env_s {
   VkUniformBuffer mvp_ub;
   image_t *image;
   VkTexture texture;
+  VkDepthBuffer depth_buffer;
 } vk_env_t;
 
 vk_env_t vk_env;
