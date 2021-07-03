@@ -7,14 +7,14 @@
 vk_env_t vk_env = { VE_OK };
 
 const vertex_t rect[] = {
-  // position             // colour
-  { {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
-  { { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-  { {  0.8f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+    // position             // colour             // uv
+  { {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+  { { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  0.8f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
 
-  { { -0.8f,  0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-  { { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-  { {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+  { { -0.8f,  0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }
 };
 
 float mvp[] = {
@@ -275,6 +275,25 @@ VULKAN_ERROR select_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR 
   return ve;
 }
 
+VULKAN_ERROR select_texture_format(VkPhysicalDevice physical_device, VkFormat *texture_format) {
+  const VkFormat formats[] = {
+    VK_FORMAT_R8G8B8A8_UNORM,
+    VK_FORMAT_B8G8R8A8_UNORM
+  };
+  const uint32_t num_formats = ARRAY_COUNT(formats);
+  VkFormatProperties format_properties;
+  for (uint32_t i = 0; i < num_formats; i++) {
+    vkGetPhysicalDeviceFormatProperties(physical_device, formats[i], &format_properties);
+    if (FLAGGED(format_properties.linearTilingFeatures,
+                VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)) {
+      *texture_format = formats[i];
+      LOG_DEBUG_INFO("Selected texture format: %d", formats[i]);
+      return VE_OK;
+    }
+  }
+  return VE_NO_SUITABLE_TEXTURE_FORMAT;
+}
+
 VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
   LOG_DEBUG_INFO("Begin select_physical_device()");
 
@@ -332,7 +351,8 @@ VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
 
     if (select_surface_format(physical_devices[i], vk_env.surface, &gpus[i].surface_format) ||
         !set_num_buffers(physical_devices[i], vk_env.surface, &gpus[i], num_buffers) ||
-        select_present_mode(physical_devices[i], vk_env.surface, &gpus[i].present_mode))
+        select_present_mode(physical_devices[i], vk_env.surface, &gpus[i].present_mode) ||
+        select_texture_format(physical_devices[i], &gpus[i].texture_format))
       continue;
 
     vkGetPhysicalDeviceFeatures(physical_devices[i], &features);
@@ -478,17 +498,6 @@ void destroy_sync_objects() {
   if (vk_env.distinct_qfi)
     hfree(vk_env.image_ownership_semaphores);
   LOG_DEBUG_INFO("Destroyed %d fences and %d semaphores", i, i * (2 + vk_env.distinct_qfi));
-}
-
-VkResult create_image_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspect_mask, VkImageView *image_view) {
-  VkImageViewCreateInfo create_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
-  create_info.image = image;
-  create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  create_info.format = format;
-  create_info.subresourceRange.aspectMask = aspect_mask;
-  create_info.subresourceRange.levelCount = 1;
-  create_info.subresourceRange.layerCount = 1;
-  return vkCreateImageView(device, &create_info, NULL, image_view);
 }
 
 void create_render_pass() {
@@ -677,6 +686,125 @@ void destroy_uniform_buffer() {
   LOG_DEBUG_INFO("End destroy_uniform_buffer()");
 }
 
+VkResult create_image(VkDevice device, VkFormat format,
+                      uint32_t width, uint32_t height,
+                      VkImageTiling tiling, VkImageUsageFlags usage,
+                      VkImageLayout init_layout, VkImage *image) {
+  VkImageCreateInfo create_info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+  create_info.imageType = VK_IMAGE_TYPE_2D;
+  create_info.format = format;
+  create_info.extent.width = width;
+  create_info.extent.height = height;
+  create_info.extent.depth = 1;
+  create_info.mipLevels = 1;
+  create_info.arrayLayers = 1;
+  create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+  create_info.tiling = tiling;
+  create_info.usage = usage;
+  create_info.initialLayout = init_layout; //VK_IMAGE_LAYOUT_UNDEFINED;
+  return vkCreateImage(device, &create_info, NULL, image);
+}
+
+VkResult create_image_view(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspect_mask, VkImageView *image_view) {
+  VkImageViewCreateInfo create_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+  create_info.image = image;
+  create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  create_info.format = format;
+  create_info.subresourceRange.aspectMask = aspect_mask;
+  create_info.subresourceRange.levelCount = 1;
+  create_info.subresourceRange.layerCount = 1;
+  return vkCreateImageView(device, &create_info, NULL, image_view);
+}
+
+void create_texture() {
+  LOG_DEBUG_INFO("Begin create_texture()");
+
+  VK_CALL(create_image(
+    vk_env.device,
+    vk_env.gpu.texture_format, // VK_FORMAT_R8G8B8A8_UNORM
+    vk_env.image->width,
+    vk_env.image->height,
+    VK_IMAGE_TILING_LINEAR,
+    VK_IMAGE_USAGE_SAMPLED_BIT,
+    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    &vk_env.texture.image
+  ));
+  LOG_DEBUG_INFO("Created texture image");
+
+  // Load image into device memory
+  VkMemoryRequirements memory_requirements;
+  vkGetImageMemoryRequirements(vk_env.device, vk_env.texture.image, &memory_requirements);
+  alloc_device_memory(
+    memory_requirements,
+    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    &vk_env.texture.device_memory
+  );
+  VK_CALL(vkBindImageMemory(vk_env.device, vk_env.texture.image, vk_env.texture.device_memory, 0));
+
+  // Get image row pitch
+  VkImageSubresource subresource = { VK_IMAGE_ASPECT_COLOR_BIT };
+  VkSubresourceLayout layout;
+  vkGetImageSubresourceLayout(vk_env.device, vk_env.texture.image, &subresource, &layout);
+
+  // Copy image into device memory
+  byte *data;
+  VK_CALL(vkMapMemory(vk_env.device, vk_env.texture.device_memory, 0, vk_env.image->data_length, 0, &data));
+  if (vk_env.image->bpp == 24) {
+    // Copy RGB image
+    for (uint32_t i = 0; i < vk_env.image->height; i++) {
+      for (uint32_t j = 0; j < vk_env.image->width; j++) {
+        uint32_t p = i * (uint32_t)layout.rowPitch + j * 4;
+        memcpy(&data[p], &vk_env.image->data[i * vk_env.image->byte_width + j * 3], 3);
+        data[p + 3] = 0xff; // Alpha = opaque
+      }
+    }
+  }
+  else {
+    // Copy RGBA image
+    for (uint32_t i = 0; i < vk_env.image->height; i++)
+      memcpy(&data[i * (uint32_t)layout.rowPitch], &vk_env.image->data[i * vk_env.image->byte_width], vk_env.image->byte_width);
+  }
+  vkUnmapMemory(vk_env.device, vk_env.texture.device_memory);
+  LOG_DEBUG_INFO("Loaded texture into device memory");
+
+  VK_CALL(create_image_view(
+    vk_env.device,
+    vk_env.texture.image,
+    vk_env.gpu.texture_format,
+    VK_IMAGE_ASPECT_COLOR_BIT,
+    &vk_env.texture.view)
+  );
+  LOG_DEBUG_INFO("Created texture image view");
+
+  VkSamplerCreateInfo sampler_info = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+  sampler_info.magFilter = VK_FILTER_NEAREST;
+  sampler_info.minFilter = VK_FILTER_NEAREST;
+  sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sampler_info.maxAnisotropy = 1;
+  VK_CALL(vkCreateSampler(vk_env.device, &sampler_info, NULL, &vk_env.texture.sampler));
+  LOG_DEBUG_INFO("Created texture sampler");
+
+  LOG_DEBUG_INFO("End create_texture()");
+}
+
+void destroy_texture() {
+  LOG_DEBUG_INFO("Begin destroy_texture()");
+
+  vkDestroySampler(vk_env.device, vk_env.texture.sampler, NULL);
+  LOG_DEBUG_INFO("Destroyed texture sampler");
+  vkDestroyImageView(vk_env.device, vk_env.texture.view, NULL);
+  LOG_DEBUG_INFO("Destroyed texture image view");
+  vkFreeMemory(vk_env.device, vk_env.texture.device_memory, NULL);
+  LOG_DEBUG_INFO("Freed texture device memory");
+  vkDestroyImage(vk_env.device, vk_env.texture.image, NULL);
+  LOG_DEBUG_INFO("Destroyed texture image");
+
+  LOG_DEBUG_INFO("End destroy_texture()");
+}
+
 void create_layouts() {
   // Descriptor set layout
   VkDescriptorSetLayoutBinding ubo_binding = { 0 };
@@ -684,7 +812,12 @@ void create_layouts() {
   ubo_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   ubo_binding.descriptorCount = 1;
   ubo_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-  VkDescriptorSetLayoutBinding bindings[] = { ubo_binding };
+  VkDescriptorSetLayoutBinding texture_binding = { 0 };
+  texture_binding.binding = 1;
+  texture_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  texture_binding.descriptorCount = 1;
+  texture_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  VkDescriptorSetLayoutBinding bindings[] = { ubo_binding, texture_binding };
 
   VkDescriptorSetLayoutCreateInfo descriptor_set_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
   descriptor_set_info.bindingCount = ARRAY_COUNT(bindings);
@@ -703,11 +836,14 @@ void create_layouts() {
 void destroy_layouts() {
   vkDestroyPipelineLayout(vk_env.device, vk_env.pipeline_layout, NULL);
   LOG_DEBUG_INFO("Destroyed pipeline layout");
+  vkDestroyDescriptorSetLayout(vk_env.device, vk_env.descriptor_set_layout, NULL);
+  LOG_DEBUG_INFO("Destroyed descriptor set layout");
 }
 
 void create_descriptor_pool() {
   const VkDescriptorPoolSize pool_sizes[] = {
-    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
+    { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
+    { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
   };
   VkDescriptorPoolCreateInfo create_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
   create_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -732,25 +868,35 @@ void alloc_descriptor_sets() {
   VkDescriptorBufferInfo buffer_info = { 0 };
   buffer_info.buffer = vk_env.mvp_ub.buffer;
   buffer_info.range = sizeof mvp;
+  VkDescriptorImageInfo image_info = { 0 };
+  image_info.sampler = vk_env.texture.sampler;
+  image_info.imageView = vk_env.texture.view;
+  image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   VkWriteDescriptorSet writes[] = {
+    { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET },
     { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET }
   };
   writes[0].descriptorCount = 1;
   writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   writes[0].pBufferInfo = &buffer_info;
+  writes[1].dstBinding = 1;
+  writes[1].descriptorCount = 1;
+  writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  writes[1].pImageInfo = &image_info;
   vk_env.descriptor_sets = halloc_type(VkDescriptorSet, vk_env.gpu.num_buffers);
   for (uint32_t i = 0; i < vk_env.gpu.num_buffers; i++) {
     VK_CALL(vkAllocateDescriptorSets(vk_env.device, &allocate_info, &vk_env.descriptor_sets[i]));
     writes[0].dstSet = vk_env.descriptor_sets[i];
+    writes[1].dstSet = vk_env.descriptor_sets[i];
     vkUpdateDescriptorSets(vk_env.device, ARRAY_COUNT(writes), writes, 0, NULL);
   }
-  LOG_DEBUG_INFO("Allocated %d uniform buffer descriptor sets", vk_env.gpu.num_buffers);
+  LOG_DEBUG_INFO("Allocated %d uniform buffer and texture sampler descriptor sets", vk_env.gpu.num_buffers);
 }
 
 void free_descriptor_sets() {
   VK_CALL(vkFreeDescriptorSets(vk_env.device, vk_env.descriptor_pool, vk_env.gpu.num_buffers, vk_env.descriptor_sets));
   hfree(vk_env.descriptor_sets);
-  LOG_DEBUG_INFO("Freed %d uniform buffer descriptor sets", vk_env.gpu.num_buffers);
+  LOG_DEBUG_INFO("Freed %d uniform buffer and texture sampler descriptor sets", vk_env.gpu.num_buffers);
 }
 
 void create_pipeline_cache() {
@@ -792,7 +938,11 @@ void create_pipeline() {
   colour_attribute.location = 1;
   colour_attribute.format = VK_FORMAT_R32G32B32_SFLOAT;
   colour_attribute.offset = offsetof(vertex_t, colour);
-  VkVertexInputAttributeDescription attribute_descriptions[] = { position_attribute, colour_attribute };
+  VkVertexInputAttributeDescription uv_attribute = { 0 };
+  uv_attribute.location = 2;
+  uv_attribute.format = VK_FORMAT_R32G32_SFLOAT;
+  uv_attribute.offset = offsetof(vertex_t, uv);
+  VkVertexInputAttributeDescription attribute_descriptions[] = { position_attribute, colour_attribute, uv_attribute };
   VkPipelineVertexInputStateCreateInfo vertex_input_state = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
   vertex_input_state.vertexBindingDescriptionCount = 1;
   vertex_input_state.pVertexBindingDescriptions = &binding_description;
@@ -1025,6 +1175,7 @@ void init_vulkan() {
   push_create(create_shader_modules, destroy_shader_modules);
   push_create(create_vertex_buffer, destroy_vertex_buffer);
   push_create(create_uniform_buffer, destroy_uniform_buffer);
+  push_create(create_texture, destroy_texture);
   push_create(create_layouts, destroy_layouts);
   push_create(create_descriptor_pool, destroy_descriptor_pool);
   push_create(alloc_descriptor_sets, free_descriptor_sets);

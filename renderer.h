@@ -119,6 +119,13 @@ typedef struct {
   void *mem_ptr;
 } VkUniformBuffer;
 
+typedef struct {
+  VkImage image;
+  VkDeviceMemory device_memory;
+  VkImageView view;
+  VkSampler sampler;
+} VkTexture;
+
 typedef struct vk_env_s {
   VULKAN_ERROR error;
   bool initialized;
@@ -159,9 +166,14 @@ typedef struct vk_env_s {
   VkVertexBuffer rect_vb;
   VkUniformBuffer mvp_ub;
   image_t *image;
+  VkTexture texture;
 } vk_env_t;
 
 vk_env_t vk_env;
+
+typedef struct {
+  float x, y;
+} vec2_t;
 
 typedef struct {
   float x, y, z;
@@ -170,6 +182,7 @@ typedef struct {
 typedef struct {
   vec3_t position;
   vec3_t colour;
+  vec2_t uv;
 } vertex_t;
 
 void init_vulkan();
