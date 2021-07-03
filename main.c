@@ -3,7 +3,12 @@
 #include "log.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow) {
-  int rc = E_FAIL;
+  image_t image = { 0 };
+  IMAGE_ERROR ie = load_png("VulkanDemo.png", &image);
+  if (ie) {
+    LOG_DEBUG_ERROR("Could not load PNG: %s", IMAGE_ERRORS[ie]);
+    return ie;
+  }
 
   window_t window = { hInstance };
   window.width = 1024;
@@ -14,7 +19,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
   window.on_move = move;
   window.on_paint = render;
   vk_env.window = &window;
+  vk_env.image = &image;
 
+  int rc = E_FAIL;
   if (create_window(&window) == WE_OK) {
     MSG msg = { 0 };
     while (msg.message != WM_QUIT) {
@@ -27,7 +34,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
     }
     rc = (int)msg.wParam;
   }
-  cleanup_window(&window);
 
+  cleanup_window(&window);
+  destroy_image(&image);
   return rc;
 }

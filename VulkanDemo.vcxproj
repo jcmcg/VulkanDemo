@@ -64,14 +64,14 @@
       <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
       <PrecompiledHeaderFile />
       <PrecompiledHeaderOutputFile />
-      <AdditionalIncludeDirectories>$(VK_SDK_PATH)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VK_SDK_PATH)\Include;C:\Projects\Libraries\include</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>kernel32.lib;user32.lib;vulkan-1.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(VK_SDK_PATH)\Lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>kernel32.lib;user32.lib;vulkan-1.lib;zlib125.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(VK_SDK_PATH)\Lib;C:\Projects\Libraries\lib\$(Platform)\$(Configuration)</AdditionalLibraryDirectories>
     </Link>
     <CustomBuildStep>
       <Command>cd "$(SolutionDir)shaders"
@@ -93,7 +93,7 @@ call compile-shaders.bat</Command>
       <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
       <PrecompiledHeaderFile />
       <PrecompiledHeaderOutputFile />
-      <AdditionalIncludeDirectories>$(VK_SDK_PATH)\Include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(VK_SDK_PATH)\Include;C:\Projects\Libraries\include</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
     <Link>
@@ -101,8 +101,8 @@ call compile-shaders.bat</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>kernel32.lib;user32.lib;vulkan-1.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(VK_SDK_PATH)\Lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>kernel32.lib;user32.lib;vulkan-1.lib;zlib125.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(VK_SDK_PATH)\Lib;C:\Projects\Libraries\lib\$(Platform)\$(Configuration)</AdditionalLibraryDirectories>
     </Link>
     <CustomBuildStep>
       <Command>cd "$(SolutionDir)shaders"
@@ -114,6 +114,7 @@ call compile-shaders.bat</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="heap.c" />
+    <ClCompile Include="image.c" />
     <ClCompile Include="log.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="renderer.c" />
@@ -121,6 +122,7 @@ call compile-shaders.bat</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="heap.h" />
+    <ClInclude Include="image.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="renderer.h" />
     <ClInclude Include="window.h" />

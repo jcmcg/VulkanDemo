@@ -2,6 +2,7 @@
 
 #include <vulkan/vulkan.h>
 #include <stdbool.h>
+#include "image.h"
 
 #define APP_NAME "VulkanDemo"
 #define APP_VERSION VK_MAKE_VERSION(1, 0, 0)
@@ -140,6 +141,8 @@ typedef struct vk_env_s {
   VkSemaphore *image_ownership_semaphores;
   VkSemaphore *draw_complete_semaphores;
   uint32_t frame_lag;
+  uint32_t frame_index;
+  uint32_t current_buffer;
   VkRenderPass render_pass;
   VkShaderModule vertex_shader;
   VkShaderModule fragment_shader;
@@ -155,8 +158,7 @@ typedef struct vk_env_s {
   VkFramebuffer *framebuffers;
   VkVertexBuffer rect_vb;
   VkUniformBuffer mvp_ub;
-  uint32_t frame_index;
-  uint32_t current_buffer;
+  image_t *image;
 } vk_env_t;
 
 vk_env_t vk_env;

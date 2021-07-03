@@ -6,12 +6,14 @@
     <ClCompile Include="main.c" />
     <ClCompile Include="renderer.c" />
     <ClCompile Include="window.c" />
+    <ClCompile Include="image.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="heap.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="renderer.h" />
     <ClInclude Include="window.h" />
+    <ClInclude Include="image.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="shaders">
