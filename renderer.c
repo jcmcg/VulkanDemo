@@ -1400,7 +1400,7 @@ void init_vulkan() {
   float projection_matrix[16] = { 0.0f };
   load_projection(PI / 4.0f, 0.1f, 100.0f, projection_matrix);
   vec3_t origin = { 0.0f, 0.0f, 0.0f };
-  vec3_t eye = { 0.0f, 3.0f, 5.0f };
+  vec3_t eye = { -2.0f, 3.0f, 4.0f };
   vec3_t up = { 0.0f, 1.0f, 0.0f };
   float view_matrix[16] = { 0.0f };
   load_view(&origin, &eye, &up, view_matrix);
