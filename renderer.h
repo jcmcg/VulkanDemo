@@ -2,6 +2,7 @@
 
 #include <vulkan/vulkan.h>
 #include <stdbool.h>
+#include "maths.h"
 #include "image.h"
 
 #define APP_NAME "VulkanDemo"
@@ -168,7 +169,7 @@ typedef struct vk_env_s {
   VkImage *swapchain_images;
   VkImageView *swapchain_views;
   VkFramebuffer *framebuffers;
-  VkVertexBuffer rect_vb;
+  VkVertexBuffer cube_vb;
   VkUniformBuffer mvp_ub;
   image_t *image;
   VkTexture texture;
@@ -176,14 +177,6 @@ typedef struct vk_env_s {
 } vk_env_t;
 
 vk_env_t vk_env;
-
-typedef struct {
-  float x, y;
-} vec2_t;
-
-typedef struct {
-  float x, y, z;
-} vec3_t;
 
 typedef struct {
   vec3_t position;

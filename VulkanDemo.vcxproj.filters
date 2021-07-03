@@ -7,6 +7,7 @@
     <ClCompile Include="renderer.c" />
     <ClCompile Include="window.c" />
     <ClCompile Include="image.c" />
+    <ClCompile Include="maths.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="heap.h" />
@@ -14,6 +15,7 @@
     <ClInclude Include="renderer.h" />
     <ClInclude Include="window.h" />
     <ClInclude Include="image.h" />
+    <ClInclude Include="maths.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="shaders">

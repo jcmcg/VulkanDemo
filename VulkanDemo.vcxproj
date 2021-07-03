@@ -117,6 +117,7 @@ call compile-shaders.bat</Command>
     <ClCompile Include="image.c" />
     <ClCompile Include="log.c" />
     <ClCompile Include="main.c" />
+    <ClCompile Include="maths.c" />
     <ClCompile Include="renderer.c" />
     <ClCompile Include="window.c" />
   </ItemGroup>
@@ -124,6 +125,7 @@ call compile-shaders.bat</Command>
     <ClInclude Include="heap.h" />
     <ClInclude Include="image.h" />
     <ClInclude Include="log.h" />
+    <ClInclude Include="maths.h" />
     <ClInclude Include="renderer.h" />
     <ClInclude Include="window.h" />
   </ItemGroup>

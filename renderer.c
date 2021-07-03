@@ -6,23 +6,58 @@
 
 vk_env_t vk_env = { VE_OK };
 
-const vertex_t rect[] = {
-    // position             // colour             // uv
-  { {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
-  { { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  0.8f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+const vertex_t cube[] = {
+    // position              // colour              // texel
+  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +X side
+  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
 
-  { { -0.8f,  0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-  { { -0.8f, -0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  0.8f,  0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }
+  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -X side
+  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+
+  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +Y side
+  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+
+  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -Y side
+  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+
+  { {  1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +Z side
+  { { -1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { { -1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+
+  { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -Z side
+  { {  1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { { -1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { {  1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { {  1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }
 };
 
-float mvp[] = {
-  1.0f, 0.0f, 0.0f, 0.0f,
-  0.0f, 1.0f, 0.0f, 0.0f,
-  0.0f, 0.0f, 1.0f, 0.0f,
-  0.0f, 0.0f, 0.0f, 1.0f
-};
+//float mvp[] = {
+//  2.29605341,  0.38383082,  0.26551038,  0.26497990,
+//  0.00000000,  2.07017112, -0.51552582, -0.51449579,
+//  0.74603301, -1.18130982, -0.81715697, -0.81552428,
+//  0.00000000,  0.00000000,  5.64242601,  5.83095264
+//};
+float mvp[16] = { 0.0f };
 
 const char *VK_ERRORS[] = {
   "OK",
@@ -657,23 +692,23 @@ void create_vertex_buffer() {
   LOG_DEBUG_INFO("Begin create_vertex_buffer()");
 
   VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-  buffer_info.size = sizeof rect;
+  buffer_info.size = sizeof cube;
   buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-  VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.rect_vb.buffer));
+  VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.cube_vb.buffer));
   LOG_DEBUG_INFO("Created vertex buffer");
 
   VkMemoryRequirements memory_requirements;
-  vkGetBufferMemoryRequirements(vk_env.device, vk_env.rect_vb.buffer, &memory_requirements);
+  vkGetBufferMemoryRequirements(vk_env.device, vk_env.cube_vb.buffer, &memory_requirements);
   alloc_device_memory(
     memory_requirements,
     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-    &vk_env.rect_vb.device_memory
+    &vk_env.cube_vb.device_memory
   );
-  VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.rect_vb.buffer, vk_env.rect_vb.device_memory, 0));
+  VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.cube_vb.buffer, vk_env.cube_vb.device_memory, 0));
   void *data;
-  VK_CALL(vkMapMemory(vk_env.device, vk_env.rect_vb.device_memory, 0, sizeof rect, 0, &data));
-  memcpy(data, rect, sizeof rect);
-  vkUnmapMemory(vk_env.device, vk_env.rect_vb.device_memory);
+  VK_CALL(vkMapMemory(vk_env.device, vk_env.cube_vb.device_memory, 0, sizeof cube, 0, &data));
+  memcpy(data, cube, sizeof cube);
+  vkUnmapMemory(vk_env.device, vk_env.cube_vb.device_memory);
   LOG_DEBUG_INFO("Loaded vertex buffer into device memory");
 
   LOG_DEBUG_INFO("End create_vertex_buffer()");
@@ -682,9 +717,9 @@ void create_vertex_buffer() {
 void destroy_vertex_buffer() {
   LOG_DEBUG_INFO("Begin destroy_vertex_buffer()");
 
-  vkFreeMemory(vk_env.device, vk_env.rect_vb.device_memory, NULL);
+  vkFreeMemory(vk_env.device, vk_env.cube_vb.device_memory, NULL);
   LOG_DEBUG_INFO("Freed vertex buffer device memory");
-  vkDestroyBuffer(vk_env.device, vk_env.rect_vb.buffer, NULL);
+  vkDestroyBuffer(vk_env.device, vk_env.cube_vb.buffer, NULL);
   LOG_DEBUG_INFO("Destroyed vertex buffer");
 
   LOG_DEBUG_INFO("End destroy_vertex_buffer()");
@@ -1049,6 +1084,7 @@ void create_pipeline() {
   VkPipelineRasterizationStateCreateInfo rasterization_state = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
   rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
   rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT;
+  //rasterization_state.cullMode = VK_CULL_MODE_NONE;
   rasterization_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
   rasterization_state.depthBiasEnable = VK_FALSE;
   rasterization_state.lineWidth = 1.0f;
@@ -1273,7 +1309,7 @@ void buffer_commands(VkCommandBuffer command_buffer, VkFramebuffer framebuffer, 
   vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_env.pipeline);
   // Vertex buffer
   VkDeviceSize offset = 0;
-  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.rect_vb.buffer, &offset);
+  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.cube_vb.buffer, &offset);
   // Uniform buffer
   vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           vk_env.pipeline_layout, 0, 1,
@@ -1302,7 +1338,8 @@ void buffer_commands(VkCommandBuffer command_buffer, VkFramebuffer framebuffer, 
     { vk_env.window->width, vk_env.window->height } // extent
   };
   vkCmdSetScissor(command_buffer, 0, 1, &scissor);
-  vkCmdDraw(command_buffer, ARRAY_COUNT(rect), 1, 0, 0);
+
+  vkCmdDraw(command_buffer, ARRAY_COUNT(cube), 1, 0, 0);
 
   // Note that ending the renderpass changes the image's layout from
   // COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
@@ -1366,6 +1403,15 @@ void prepare_command_buffers() {
 void init_vulkan() {
   LOG_DEBUG_INFO("Begin init_vulkan()");
 
+  float projection_matrix[16] = { 0.0f };
+  load_projection(PI / 4.0f, 0.1f, 100.0f, projection_matrix);
+  vec3_t origin = { 0.0f, 0.0f, 0.0f };
+  vec3_t eye = { -2.0f, 3.0f, 4.0f };
+  vec3_t up = { 0.0f, 1.0f, 0.0f };
+  float view_matrix[16] = { 0.0f };
+  load_view(&origin, &eye, &up, view_matrix);
+  mult_mat4(projection_matrix, view_matrix, mvp);
+
   if (
 #ifdef _DEBUG
     (vk_env.error = enum_validation_layers()) ||
@@ -1409,6 +1455,7 @@ void init_vulkan() {
 void cleanup_vulkan() {
   LOG_DEBUG_INFO("Begin cleanup_vulkan()");
 
+  VK_CALL(vkDeviceWaitIdle(vk_env.device));
   while (vk_env.cd_stack)
     pop_destroy();
   if (vk_env.gpu.name)
@@ -1428,8 +1475,8 @@ void resize() {
 }
 
 void move(int x, int y) {
-  mvp[12] += x * 0.01f;
-  mvp[13] += y * 0.01f;
+  mvp[12] += x * 0.05f;
+  mvp[13] += y * 0.05f;
 }
 
 VkResult handle_swapchain_result(VkResult ve) {
@@ -1457,6 +1504,7 @@ VkResult handle_swapchain_result(VkResult ve) {
 }
 
 void begin_render() {
+  VK_CALL(vkDeviceWaitIdle(vk_env.device));
   // Ensure no more than FRAME_LAG renderings are outstanding
   vkWaitForFences(vk_env.device, 1, &vk_env.fences[vk_env.frame_index], VK_TRUE, UINT64_MAX);
   vkResetFences(vk_env.device, 1, &vk_env.fences[vk_env.frame_index]);
