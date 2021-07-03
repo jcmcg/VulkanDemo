@@ -51,12 +51,6 @@ const vertex_t cube[] = {
   { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }
 };
 
-//float mvp[] = {
-//  2.29605341,  0.38383082,  0.26551038,  0.26497990,
-//  0.00000000,  2.07017112, -0.51552582, -0.51449579,
-//  0.74603301, -1.18130982, -0.81715697, -0.81552428,
-//  0.00000000,  0.00000000,  5.64242601,  5.83095264
-//};
 float mvp[16] = { 0.0f };
 
 const char *VK_ERRORS[] = {
@@ -1406,7 +1400,7 @@ void init_vulkan() {
   float projection_matrix[16] = { 0.0f };
   load_projection(PI / 4.0f, 0.1f, 100.0f, projection_matrix);
   vec3_t origin = { 0.0f, 0.0f, 0.0f };
-  vec3_t eye = { -2.0f, 3.0f, 4.0f };
+  vec3_t eye = { 0.0f, 3.0f, 5.0f };
   vec3_t up = { 0.0f, 1.0f, 0.0f };
   float view_matrix[16] = { 0.0f };
   load_view(&origin, &eye, &up, view_matrix);
@@ -1548,6 +1542,9 @@ void render() {
   if (vk_env.window->minimized)
     return;
   begin_render(vk_env);
-  memcpy(vk_env.mvp_ub.mem_ptr, mvp, sizeof mvp);
+  float rotation_matrix[16] = { 0.0f };
+  load_rotation_y(PI / 5000.0f, rotation_matrix);
+  mult_mat4(mvp, rotation_matrix, vk_env.mvp_ub.mem_ptr);
+  memcpy(mvp, vk_env.mvp_ub.mem_ptr, sizeof mvp);
   end_render(vk_env);
 }

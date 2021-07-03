@@ -84,3 +84,14 @@ void load_projection(float fov, float near, float far, float *matrix) {
   matrix[11] = -1.0f;
   matrix[14] = 2.0f * near * far / d;
 }
+
+void load_rotation_y(float angle, float *matrix) {
+  float s = sinf(angle),
+        c = cosf(angle);
+  matrix[0] = c;
+  matrix[2] = -s;
+  matrix[5] = 1.0f;
+  matrix[8] = s;
+  matrix[10] = c;
+  matrix[15] = 1.0f;
+}
