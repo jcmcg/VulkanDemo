@@ -12,6 +12,7 @@
 #define SHADER_NAME "shader"
 #define SHADER_ENTRY_POINT_NAME "main"
 #define NUM_BUFFERS 3 // Triple buffering
+#define NUM_AA_SAMPLES 8 // 8 Anti-aliasing samples
 
 #define ARRAY_COUNT(a) (sizeof (a) / sizeof (a[0]))
 #define CLAMP(V, MIN, MAX) if (V < MIN) V = MIN; else if (MAX && V > MAX) V = MAX
@@ -90,7 +91,8 @@ typedef enum {
   GPU_SUPPORT_RASTERIZATION = 1,
   GPU_SUPPORT_RAYTRACING = 2,
   GPU_SUPPORT_TEXTURE_COMPRESSION = 4,
-  GPU_SUPPORT_ANISTROPIC_FILTERING = 8
+  GPU_SUPPORT_ANISTROPIC_FILTERING = 8,
+  GPU_SUPPORT_SAMPLE_SHADING = 16
 } GPU_SUPPORT;
 
 typedef struct {
@@ -131,6 +133,12 @@ typedef struct {
   VkImageView view;
   VkDeviceMemory device_memory;
 } VkDepthBuffer;
+
+typedef struct {
+  VkImage image;
+  VkImageView view;
+  VkDeviceMemory device_memory;
+} VkResolveBuffer;
 
 typedef struct vk_env_s {
   VULKAN_ERROR error;
@@ -174,6 +182,7 @@ typedef struct vk_env_s {
   image_t *image;
   VkTexture texture;
   VkDepthBuffer depth_buffer;
+  VkResolveBuffer resolve_buffer;
 } vk_env_t;
 
 vk_env_t vk_env;

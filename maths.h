@@ -16,4 +16,6 @@ void mult_mat4(float *, float *, float *);
 void load_identity(float *);
 void load_view(vec3_t *, vec3_t *, vec3_t *, float *);
 void load_projection(float, float, float, float *);
-void load_rotation_y(float, float *);
+void rotate_x(float, float *, float *);
+void rotate_y(float, float *, float *);
+void rotate_z(float, float *, float *);

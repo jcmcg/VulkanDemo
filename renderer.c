@@ -272,6 +272,32 @@ VkBool32 set_num_buffers(VkPhysicalDevice physical_device, VkSurfaceKHR surface,
   return gpu->num_buffers == num_requested;
 }
 
+VkBool32 set_num_aa_samples(VkPhysicalDevice physical_device, GPU *gpu, uint32_t num_requested) {
+  LOG_DEBUG_INFO("%d antialiasing samples requested", num_requested);
+  gpu->num_aa_samples = num_requested;
+  if (num_requested < VK_SAMPLE_COUNT_1_BIT || num_requested > VK_SAMPLE_COUNT_16_BIT)
+    return VK_FALSE;
+  if (num_requested == VK_SAMPLE_COUNT_1_BIT) // Always supported
+    return VK_TRUE;
+  VkImageFormatProperties image_format_props;
+  VK_CALL(vkGetPhysicalDeviceImageFormatProperties(
+    physical_device,
+    gpu->surface_format.format,
+    VK_IMAGE_TYPE_2D,
+    VK_IMAGE_TILING_OPTIMAL,
+    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    0, &image_format_props
+  ));
+  VkSampleCountFlagBits count;
+  for (
+    count = VK_SAMPLE_COUNT_16_BIT;
+    count >= VK_SAMPLE_COUNT_2_BIT &&
+    (gpu->num_aa_samples < count || !FLAGGED(image_format_props.sampleCounts, count));
+    count >>= 1
+    );
+  return count == num_requested;
+}
+
 VkBool32 set_present_mode(VkPresentModeKHR *present_modes, uint32_t num_modes,
                           VkPresentModeKHR req_present_mode, VkPresentModeKHR *present_mode) {
   uint32_t i;
@@ -347,7 +373,7 @@ VULKAN_ERROR select_depth_format(VkPhysicalDevice physical_device, VkFormat *dep
   return VE_NO_SUITABLE_DEPTH_FORMAT;
 }
 
-VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
+VULKAN_ERROR select_physical_device(uint32_t num_buffers, uint32_t num_aa_samples) {
   LOG_DEBUG_INFO("Begin select_physical_device()");
 
   uint32_t num_gpus = 0, num_extensions, num_queue_families, i, j;
@@ -404,6 +430,7 @@ VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
 
     if (select_surface_format(physical_devices[i], vk_env.surface, &gpus[i].surface_format) ||
         !set_num_buffers(physical_devices[i], vk_env.surface, &gpus[i], num_buffers) ||
+        !set_num_aa_samples(physical_devices[i], &gpus[i], num_aa_samples) ||
         select_present_mode(physical_devices[i], vk_env.surface, &gpus[i].present_mode) ||
         select_texture_format(physical_devices[i], &gpus[i].texture_format) ||
         select_depth_format(physical_devices[i], &gpus[i].depth_format))
@@ -414,6 +441,8 @@ VULKAN_ERROR select_physical_device(uint32_t num_buffers) {
       gpus[i].support |= GPU_SUPPORT_TEXTURE_COMPRESSION;
     if (features.samplerAnisotropy)
       gpus[i].support |= GPU_SUPPORT_ANISTROPIC_FILTERING;
+    if (features.sampleRateShading)
+      gpus[i].support |= GPU_SUPPORT_SAMPLE_SHADING;
 
     vkGetPhysicalDeviceProperties(physical_devices[i], &properties);
     gpus[i].name = properties.deviceName;
@@ -559,17 +588,13 @@ void create_render_pass() {
 
   VkAttachmentDescription colour_desc = { 0 };
   colour_desc.format = vk_env.gpu.surface_format.format;
-  colour_desc.samples = VK_SAMPLE_COUNT_1_BIT;
+  colour_desc.samples = vk_env.gpu.num_aa_samples;
   colour_desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   colour_desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   colour_desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   colour_desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   colour_desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  colour_desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-  // https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples
-  // The image will automatically be transitioned from
-  // VK_IMAGE_LAYOUT_UNDEFINED to VK_COLOR_ATTACHMENT_OPTIMAL for rendering,
-  // then out to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR at the end.
+  colour_desc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   const VkAttachmentReference colour_attachment = {
     0, // attachment
     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL // layout
@@ -577,7 +602,7 @@ void create_render_pass() {
 
   VkAttachmentDescription depth_desc = { 0 };
   depth_desc.format = vk_env.gpu.depth_format;
-  depth_desc.samples = VK_SAMPLE_COUNT_1_BIT;
+  depth_desc.samples = vk_env.gpu.num_aa_samples;
   depth_desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   depth_desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
   depth_desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -588,13 +613,30 @@ void create_render_pass() {
     1, // attachment
     VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL // layout
   };
-  VkAttachmentDescription attachments[] = { colour_desc, depth_desc };
+
+  VkAttachmentDescription resolve_desc = { 0 };
+  resolve_desc.format = vk_env.gpu.surface_format.format;
+  resolve_desc.samples = VK_SAMPLE_COUNT_1_BIT;
+  resolve_desc.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  resolve_desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  resolve_desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  resolve_desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+  resolve_desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  resolve_desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  const VkAttachmentReference resolve_attachment = {
+    2, // attachment
+    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL // layout
+  };
+
+  VkAttachmentDescription attachments[] = { colour_desc, depth_desc, resolve_desc };
 
   VkSubpassDescription subpass = { 0 };
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments = &colour_attachment;
   subpass.pDepthStencilAttachment = &depth_attachment;
+  subpass.pResolveAttachments = &resolve_attachment;
+
   VkRenderPassCreateInfo create_info = { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO };
   create_info.attachmentCount = ARRAY_COUNT(attachments);
   create_info.pAttachments = attachments;
@@ -757,8 +799,8 @@ void destroy_uniform_buffer() {
 
 VkResult create_image(VkDevice device, VkFormat format,
                       uint32_t width, uint32_t height,
-                      VkImageTiling tiling, VkImageUsageFlags usage,
-                      VkImage *image) {
+                      VkSampleCountFlagBits samples, VkImageTiling tiling,
+                      VkImageUsageFlags usage, VkImage *image) {
   VkImageCreateInfo create_info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
   create_info.imageType = VK_IMAGE_TYPE_2D;
   create_info.format = format;
@@ -767,7 +809,7 @@ VkResult create_image(VkDevice device, VkFormat format,
   create_info.extent.depth = 1;
   create_info.mipLevels = 1;
   create_info.arrayLayers = 1;
-  create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+  create_info.samples = samples;
   create_info.tiling = tiling;
   create_info.usage = usage;
   create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -793,6 +835,7 @@ void create_texture() {
     vk_env.gpu.texture_format, // VK_FORMAT_R8G8B8A8_UNORM
     vk_env.image->width,
     vk_env.image->height,
+    VK_SAMPLE_COUNT_1_BIT,
     VK_IMAGE_TILING_LINEAR,
     VK_IMAGE_USAGE_SAMPLED_BIT,
     &vk_env.texture.image
@@ -871,54 +914,6 @@ void destroy_texture() {
   LOG_DEBUG_INFO("Destroyed texture image");
 
   LOG_DEBUG_INFO("End destroy_texture()");
-}
-
-void create_depth_buffer() {
-  LOG_DEBUG_INFO("Begin create_depth_buffer()");
-
-  VK_CALL(create_image(
-    vk_env.device,
-    vk_env.gpu.depth_format,
-    vk_env.window->width,
-    vk_env.window->height,
-    VK_IMAGE_TILING_OPTIMAL,
-    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-    &vk_env.depth_buffer.image
-  ));
-  LOG_DEBUG_INFO("Created depth buffer image");
-
-  VkMemoryRequirements memory_requirements;
-  vkGetImageMemoryRequirements(vk_env.device, vk_env.depth_buffer.image, &memory_requirements); // 1665 = 11010000001 // size = 8847360, alignment = 32
-  alloc_device_memory(
-    memory_requirements,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-    &vk_env.depth_buffer.device_memory
-  );
-  VK_CALL(vkBindImageMemory(vk_env.device, vk_env.depth_buffer.image, vk_env.depth_buffer.device_memory, 0));
-
-  VK_CALL(create_image_view(
-    vk_env.device,
-    vk_env.depth_buffer.image,
-    vk_env.gpu.depth_format,
-    VK_IMAGE_ASPECT_DEPTH_BIT,
-    &vk_env.depth_buffer.view
-  ));
-  LOG_DEBUG_INFO("Created depth buffer image view");
-
-  LOG_DEBUG_INFO("End create_depth_buffer()");
-}
-
-void destroy_depth_buffer() {
-  LOG_DEBUG_INFO("Begin destroy_depth_buffer()");
-
-  vkDestroyImageView(vk_env.device, vk_env.depth_buffer.view, NULL);
-  LOG_DEBUG_INFO("Destroyed depth buffer image view");
-  vkFreeMemory(vk_env.device, vk_env.depth_buffer.device_memory, NULL);
-  LOG_DEBUG_INFO("Freed depth buffer device memory");
-  vkDestroyImage(vk_env.device, vk_env.depth_buffer.image, NULL);
-  LOG_DEBUG_INFO("Destroyed depth buffer image");
-
-  LOG_DEBUG_INFO("End destroy_depth_buffer()");
 }
 
 void create_layouts() {
@@ -1085,7 +1080,15 @@ void create_pipeline() {
 
   // Multisample state
   VkPipelineMultisampleStateCreateInfo multisample_state = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-  multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  multisample_state.rasterizationSamples = vk_env.gpu.num_aa_samples;
+  if (FLAGGED(vk_env.gpu.support, GPU_SUPPORT_SAMPLE_SHADING)) {
+    multisample_state.sampleShadingEnable = VK_TRUE;
+    multisample_state.minSampleShading = 1.0f;
+  }
+
+  //const VkSampleMask *pSampleMask;
+  //VkBool32                                 alphaToCoverageEnable;
+  //VkBool32                                 alphaToOneEnable;
 
   // Depth stencil
   VkPipelineDepthStencilStateCreateInfo depth_stencil_state = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
@@ -1145,6 +1148,104 @@ void create_pipeline() {
 void destroy_pipeline() {
   vkDestroyPipeline(vk_env.device, vk_env.pipeline, NULL);
   LOG_DEBUG_INFO("Destroyed pipeline");
+}
+
+void create_depth_buffer() {
+  LOG_DEBUG_INFO("Begin create_depth_buffer()");
+
+  VK_CALL(create_image(
+    vk_env.device,
+    vk_env.gpu.depth_format,
+    vk_env.window->width,
+    vk_env.window->height,
+    vk_env.gpu.num_aa_samples,
+    VK_IMAGE_TILING_OPTIMAL,
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    &vk_env.depth_buffer.image
+  ));
+  LOG_DEBUG_INFO("Created depth buffer image");
+
+  VkMemoryRequirements memory_requirements;
+  vkGetImageMemoryRequirements(vk_env.device, vk_env.depth_buffer.image, &memory_requirements); // 1665 = 11010000001 // size = 8847360, alignment = 32
+  alloc_device_memory(
+    memory_requirements,
+    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    &vk_env.depth_buffer.device_memory
+  );
+  VK_CALL(vkBindImageMemory(vk_env.device, vk_env.depth_buffer.image, vk_env.depth_buffer.device_memory, 0));
+
+  VK_CALL(create_image_view(
+    vk_env.device,
+    vk_env.depth_buffer.image,
+    vk_env.gpu.depth_format,
+    VK_IMAGE_ASPECT_DEPTH_BIT,
+    &vk_env.depth_buffer.view
+  ));
+  LOG_DEBUG_INFO("Created depth buffer image view");
+
+  LOG_DEBUG_INFO("End create_depth_buffer()");
+}
+
+void destroy_depth_buffer() {
+  LOG_DEBUG_INFO("Begin destroy_depth_buffer()");
+
+  vkDestroyImageView(vk_env.device, vk_env.depth_buffer.view, NULL);
+  LOG_DEBUG_INFO("Destroyed depth buffer image view");
+  vkFreeMemory(vk_env.device, vk_env.depth_buffer.device_memory, NULL);
+  LOG_DEBUG_INFO("Freed depth buffer device memory");
+  vkDestroyImage(vk_env.device, vk_env.depth_buffer.image, NULL);
+  LOG_DEBUG_INFO("Destroyed depth buffer image");
+
+  LOG_DEBUG_INFO("End destroy_depth_buffer()");
+}
+
+void create_resolve_buffer() {
+  LOG_DEBUG_INFO("Begin create_resolve_buffer()");
+
+  VK_CALL(create_image(
+    vk_env.device,
+    vk_env.gpu.surface_format.format,
+    vk_env.window->width,
+    vk_env.window->height,
+    vk_env.gpu.num_aa_samples,
+    VK_IMAGE_TILING_OPTIMAL,
+    VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    &vk_env.resolve_buffer.image
+  ));
+  LOG_DEBUG_INFO("Created resolve buffer image");
+
+  VkMemoryRequirements memory_requirements;
+  vkGetImageMemoryRequirements(vk_env.device, vk_env.resolve_buffer.image, &memory_requirements); // 1665 = 11010000001 // size = 8847360, alignment = 32
+  alloc_device_memory(
+    memory_requirements,
+    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    &vk_env.resolve_buffer.device_memory
+  );
+  VK_CALL(vkBindImageMemory(vk_env.device, vk_env.resolve_buffer.image, vk_env.resolve_buffer.device_memory, 0));
+
+  VK_CALL(create_image_view(
+    vk_env.device,
+    vk_env.resolve_buffer.image,
+    vk_env.gpu.surface_format.format,
+    VK_IMAGE_ASPECT_COLOR_BIT,
+    &vk_env.resolve_buffer.view
+  ));
+  LOG_DEBUG_INFO("Created resolve buffer image view");
+
+  LOG_DEBUG_INFO("End create_resolve_buffer()");
+}
+
+void destroy_resolve_buffer() {
+  LOG_DEBUG_INFO("Begin destroy_resolve_buffer()");
+
+  vkDestroyImageView(vk_env.device, vk_env.resolve_buffer.view, NULL);
+  LOG_DEBUG_INFO("Destroyed resolve buffer image view");
+  vkFreeMemory(vk_env.device, vk_env.resolve_buffer.device_memory, NULL);
+  LOG_DEBUG_INFO("Freed resolve buffer device memory");
+  vkDestroyImage(vk_env.device, vk_env.resolve_buffer.image, NULL);
+  LOG_DEBUG_INFO("Destroyed resolve buffer image");
+
+  LOG_DEBUG_INFO("End destroy_resolve_buffer()");
 }
 
 void destroy_swapchain(VkSwapchainKHR swapchain) {
@@ -1248,7 +1349,7 @@ void create_swapchain() {
   vk_env.swapchain_views = halloc_type(VkImageView, vk_env.gpu.num_buffers);
   vk_env.framebuffers = halloc_type(VkFramebuffer, vk_env.gpu.num_buffers);
 
-  VkImageView attachments[] = { VK_NULL_HANDLE, vk_env.depth_buffer.view };
+  VkImageView attachments[] = { vk_env.resolve_buffer.view, vk_env.depth_buffer.view, VK_NULL_HANDLE };
   VkFramebufferCreateInfo create_info = { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO };
   create_info.renderPass = vk_env.render_pass;
   create_info.attachmentCount = ARRAY_COUNT(attachments);
@@ -1264,7 +1365,7 @@ void create_swapchain() {
       VK_IMAGE_ASPECT_COLOR_BIT,
       &vk_env.swapchain_views[i]
     ));
-    attachments[0] = vk_env.swapchain_views[i];
+    attachments[2] = vk_env.swapchain_views[i];
     VK_CALL(vkCreateFramebuffer(vk_env.device, &create_info, NULL, &vk_env.framebuffers[i]));
     // ERROR Validation Error : [VUID - VkFramebufferCreateInfo - width - 00885]
     // Object 0 : handle = 0x1ddce66c638, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0xb6981526 |
@@ -1419,7 +1520,7 @@ void init_vulkan() {
   push_create(create_instance, destroy_instance);
   push_create(create_surface, destroy_surface);
 
-  if ((vk_env.error = select_physical_device(NUM_BUFFERS))) {
+  if ((vk_env.error = select_physical_device(NUM_BUFFERS, NUM_AA_SAMPLES))) {
     LOG_DEBUG_ERROR(VK_ERRORS[vk_env.error]);
     return;
   }
@@ -1433,12 +1534,13 @@ void init_vulkan() {
   push_create(create_vertex_buffer, destroy_vertex_buffer);
   push_create(create_uniform_buffer, destroy_uniform_buffer);
   push_create(create_texture, destroy_texture);
-  push_create(create_depth_buffer, destroy_depth_buffer);
   push_create(create_layouts, destroy_layouts);
   push_create(create_descriptor_pool, destroy_descriptor_pool);
   push_create(alloc_descriptor_sets, free_descriptor_sets);
   push_create(create_pipeline_cache, destroy_pipeline_cache);
   push_create(create_pipeline, destroy_pipeline);
+  push_create(NULL, destroy_depth_buffer);
+  push_create(NULL, destroy_resolve_buffer);
   push_create(NULL, destroy_swapchain_final);
 
   vk_env.initialized = true;
@@ -1462,7 +1564,11 @@ void resize() {
   if (!vk_env.initialized)
     return;
   VK_CALL(vkDeviceWaitIdle(vk_env.device));
-  destroy_depth_buffer();
+  if (vk_env.resolve_buffer.image)
+    destroy_resolve_buffer();
+  if (vk_env.depth_buffer.image)
+    destroy_depth_buffer();
+  create_resolve_buffer();
   create_depth_buffer();
   create_swapchain();
   prepare_command_buffers(vk_env);
@@ -1542,9 +1648,7 @@ void render() {
   if (vk_env.window->minimized)
     return;
   begin_render(vk_env);
-  float rotation_matrix[16] = { 0.0f };
-  load_rotation_y(PI / 5000.0f, rotation_matrix);
-  mult_mat4(mvp, rotation_matrix, vk_env.mvp_ub.mem_ptr);
+  rotate_y(PI / 5000.0f, mvp, vk_env.mvp_ub.mem_ptr);
   memcpy(mvp, vk_env.mvp_ub.mem_ptr, sizeof mvp);
   end_render(vk_env);
 }

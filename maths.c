@@ -27,9 +27,6 @@ inline void norm_vec3(vec3_t *v, vec3_t *r) {
   r->z = v->z / l;
 }
 
-inline void translate_mat4(vec3_t *v, float *m) {
-}
-
 void mult_mat4(float *m, float *n, float *r) {
   int i, j, k;
   for (i = 0; i < 4; i++) {
@@ -68,7 +65,6 @@ void load_view(vec3_t *origin, vec3_t *eye, vec3_t *up, float *matrix) {
   matrix[8] = side.z;
   matrix[9] = up->z;
   matrix[10] = -forward.z;
-
   matrix[12] = side.x * eye->x + side.y * eye->y + side.z * eye->z;
   matrix[13] = up->x * eye->x + up->y * eye->y + up->z * eye->z;
   matrix[14] = forward.x * eye->x + forward.y * eye->y + forward.z * eye->z;
@@ -77,7 +73,7 @@ void load_view(vec3_t *origin, vec3_t *eye, vec3_t *up, float *matrix) {
 
 void load_projection(float fov, float near, float far, float *matrix) {
   float t = 1.0f / tanf(fov / 2.0f),
-    d = near - far;
+        d = near - far;
   matrix[0] = t;
   matrix[5] = t;
   matrix[10] = (near + far) / d;
@@ -85,13 +81,41 @@ void load_projection(float fov, float near, float far, float *matrix) {
   matrix[14] = 2.0f * near * far / d;
 }
 
-void load_rotation_y(float angle, float *matrix) {
+void rotate_x(float angle, float *m, float *r) {
   float s = sinf(angle),
-        c = cosf(angle);
-  matrix[0] = c;
-  matrix[2] = -s;
-  matrix[5] = 1.0f;
-  matrix[8] = s;
-  matrix[10] = c;
-  matrix[15] = 1.0f;
+        c = cosf(angle),
+        rm[16] = { 0.0f };
+  rm[0] = 1.0f;
+  rm[5] = c;
+  rm[6] = s;
+  rm[9] = -s;
+  rm[10] = c;
+  rm[15] = 1.0f;
+  mult_mat4(m, rm, r);
+}
+
+void rotate_y(float angle, float *m, float *r) {
+  float s = sinf(angle),
+        c = cosf(angle),
+        rm[16] = { 0.0f };
+  rm[0] = c;
+  rm[2] = -s;
+  rm[5] = 1.0f;
+  rm[8] = s;
+  rm[10] = c;
+  rm[15] = 1.0f;
+  mult_mat4(m, rm, r);
+}
+
+void rotate_z(float angle, float *m, float *r) {
+  float s = sinf(angle),
+        c = cosf(angle),
+        rm[16] = { 0.0f };
+  rm[0] = c;
+  rm[1] = s;
+  rm[4] = -s;
+  rm[5] = c;
+  rm[10] = 1.0f;
+  rm[15] = 1.0f;
+  mult_mat4(m, rm, r);
 }
