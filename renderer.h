@@ -118,6 +118,11 @@ typedef struct {
 typedef struct {
   VkBuffer buffer;
   VkDeviceMemory device_memory;
+} VkIndexBuffer;
+
+typedef struct {
+  VkBuffer buffer;
+  VkDeviceMemory device_memory;
   void *mem_ptr;
 } VkUniformBuffer;
 
@@ -178,6 +183,7 @@ typedef struct vk_env_s {
   VkImageView *swapchain_views;
   VkFramebuffer *framebuffers;
   VkVertexBuffer cube_vb;
+  VkIndexBuffer cube_ib;
   VkUniformBuffer mvp_ub;
   image_t *image;
   VkTexture texture;

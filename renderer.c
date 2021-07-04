@@ -6,49 +6,103 @@
 
 vk_env_t vk_env = { VE_OK };
 
-const vertex_t cube[] = {
-    // position              // colour              // texel
-  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +X side
-  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
-  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+//const vertex_t cube_vertices[] = {
+//    // position              // colour              // texel
+//  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +X side // 6 0 15
+//  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 5 0 12
+//  { {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },            // 4 0 10
+//  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },            // 7 0 17
+//  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 5 0 12
+//  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },            // 6 0 15
+//
+//  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -X side // 3 0 7
+//  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 0 0 0
+//  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },            // 1 0 2
+//  { { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },            // 2 0 5
+//  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 0 0 0
+//  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },            // 3 0 7
+//
+//  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +Y side // 6 0 15
+//  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 3 1 8
+//  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },            // 7 1 18
+//  { { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },            // 2 0 5
+//  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 3 1 8
+//  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },            // 6 0 15
+//
+//  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -Y side // 5 1 13
+//  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 0 0 0
+//  { {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },            // 4 0 10
+//  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },            // 1 1 3
+//  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 0 0 0
+//  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },            // 5 1 13
+//
+//  { {  1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +Z side // 7 2 19
+//  { { -1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 1 2 4
+//  { {  1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },            // 5 2 14
+//  { { -1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },            // 3 2 9
+//  { { -1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 1 2 4
+//  { {  1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },            // 7 2 19
+//
+//  { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -Z side // 2 1 6
+//  { {  1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 4 1 11
+//  { { -1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },            // 0 1 1
+//  { {  1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },            // 6 1 16
+//  { {  1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },            // 4 1 11
+//  { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }             // 2 1 6
+//};
 
-  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -X side
+//const vertex_t cube_vertices[] = {
+//  // position              // colour             // texel
+//{ { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+//{ { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+//{ { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+//{ { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+//{ {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+//{ {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+//{ {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+//{ {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } }
+//};
+//
+//const uint16_t cube_indices[] = {
+//  6, 5, 4, 7, 5, 6,
+//  3, 0, 1, 2, 0, 3,
+//  6, 3, 7, 2, 3, 6,
+//  5, 0, 4, 1, 0, 5,
+//  7, 1, 5, 3, 1, 7,
+//  2, 4, 0, 6, 4, 2
+//};
+
+const vertex_t cube_vertices[] = {
+    // position              // colour             // texel
   { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
-  { { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
-
-  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +Y side
-  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
-  { { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
-
-  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -Y side
-  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
-  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-  { { -1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
-
-  { {  1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // +Z side
-  { { -1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
-  { { -1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
-  { { -1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { {  1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
-
-  { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }, // -Z side
-  { {  1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
   { { -1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
-  { {  1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { { -1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { { -1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+  { { -1.0f,  1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { { -1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { {  1.0f, -1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
   { {  1.0f, -1.0f, -1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
-  { { -1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }
+  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 1.0f, 0.0f }, { 0.0f, 1.0f } },
+  { {  1.0f, -1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+  { {  1.0f, -1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { {  1.0f,  1.0f, -1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } },
+  { {  1.0f,  1.0f, -1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 0.0f, 0.0f } },
+  { {  1.0f,  1.0f,  1.0f }, { 1.0f, 0.0f, 0.0f }, { 1.0f, 1.0f } },
+  { {  1.0f,  1.0f,  1.0f }, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f } }
+};
+
+const uint16_t cube_indices[] = {
+  15, 12, 10, 17, 12, 15,
+   7,  0,  2,  5,  0,  7,
+  15,  8, 18,  5,  8, 15,
+  13,  0, 10,  3,  0, 13,
+  19,  4, 14,  9,  4, 19,
+   6, 11,  1, 16, 11,  6
 };
 
 float mvp[16] = { 0.0f };
@@ -488,6 +542,7 @@ void create_logical_device() {
   VkPhysicalDeviceFeatures device_features = { 0 };
   device_features.textureCompressionBC = VK_TRUE;
   device_features.samplerAnisotropy = VK_TRUE;
+  device_features.sampleRateShading = FLAGGED(vk_env.gpu.support, GPU_SUPPORT_SAMPLE_SHADING);
 
   VkDeviceCreateInfo device_info = { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
   device_info.queueCreateInfoCount = num_queues;
@@ -728,7 +783,7 @@ void create_vertex_buffer() {
   LOG_DEBUG_INFO("Begin create_vertex_buffer()");
 
   VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-  buffer_info.size = sizeof cube;
+  buffer_info.size = sizeof cube_vertices;
   buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
   VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.cube_vb.buffer));
   LOG_DEBUG_INFO("Created vertex buffer");
@@ -742,8 +797,8 @@ void create_vertex_buffer() {
   );
   VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.cube_vb.buffer, vk_env.cube_vb.device_memory, 0));
   void *data;
-  VK_CALL(vkMapMemory(vk_env.device, vk_env.cube_vb.device_memory, 0, sizeof cube, 0, &data));
-  memcpy(data, cube, sizeof cube);
+  VK_CALL(vkMapMemory(vk_env.device, vk_env.cube_vb.device_memory, 0, sizeof cube_vertices, 0, &data));
+  memcpy(data, cube_vertices, sizeof cube_vertices);
   vkUnmapMemory(vk_env.device, vk_env.cube_vb.device_memory);
   LOG_DEBUG_INFO("Loaded vertex buffer into device memory");
 
@@ -759,6 +814,43 @@ void destroy_vertex_buffer() {
   LOG_DEBUG_INFO("Destroyed vertex buffer");
 
   LOG_DEBUG_INFO("End destroy_vertex_buffer()");
+}
+
+void create_index_buffer() {
+  LOG_DEBUG_INFO("Begin create_vertex_buffer()");
+
+  VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+  buffer_info.size = sizeof cube_indices;
+  buffer_info.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+  VK_CALL(vkCreateBuffer(vk_env.device, &buffer_info, NULL, &vk_env.cube_ib.buffer));
+  LOG_DEBUG_INFO("Created index buffer");
+
+  VkMemoryRequirements memory_requirements;
+  vkGetBufferMemoryRequirements(vk_env.device, vk_env.cube_ib.buffer, &memory_requirements);
+  alloc_device_memory(
+    memory_requirements,
+    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+    &vk_env.cube_ib.device_memory
+  );
+  VK_CALL(vkBindBufferMemory(vk_env.device, vk_env.cube_ib.buffer, vk_env.cube_ib.device_memory, 0));
+  void *data;
+  VK_CALL(vkMapMemory(vk_env.device, vk_env.cube_ib.device_memory, 0, sizeof cube_indices, 0, &data));
+  memcpy(data, cube_indices, sizeof cube_indices);
+  vkUnmapMemory(vk_env.device, vk_env.cube_ib.device_memory);
+  LOG_DEBUG_INFO("Loaded index buffer into device memory");
+
+  LOG_DEBUG_INFO("End create_vertex_buffer()");
+}
+
+void destroy_index_buffer() {
+  LOG_DEBUG_INFO("Begin destroy_index_buffer()");
+
+  vkFreeMemory(vk_env.device, vk_env.cube_ib.device_memory, NULL);
+  LOG_DEBUG_INFO("Freed index buffer device memory");
+  vkDestroyBuffer(vk_env.device, vk_env.cube_ib.buffer, NULL);
+  LOG_DEBUG_INFO("Destroyed index buffer");
+
+  LOG_DEBUG_INFO("End destroy_index_buffer()");
 }
 
 void create_uniform_buffer() {
@@ -1405,6 +1497,8 @@ void buffer_commands(VkCommandBuffer command_buffer, VkFramebuffer framebuffer, 
   // Vertex buffer
   VkDeviceSize offset = 0;
   vkCmdBindVertexBuffers(command_buffer, 0, 1, &vk_env.cube_vb.buffer, &offset);
+  // Index buffer
+  vkCmdBindIndexBuffer(command_buffer, vk_env.cube_ib.buffer, 0, VK_INDEX_TYPE_UINT16);
   // Uniform buffer
   vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           vk_env.pipeline_layout, 0, 1,
@@ -1434,7 +1528,7 @@ void buffer_commands(VkCommandBuffer command_buffer, VkFramebuffer framebuffer, 
   };
   vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-  vkCmdDraw(command_buffer, ARRAY_COUNT(cube), 1, 0, 0);
+  vkCmdDrawIndexed(command_buffer, ARRAY_COUNT(cube_indices), 1, 0, 0, 0);
 
   // Note that ending the renderpass changes the image's layout from
   // COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
@@ -1532,6 +1626,7 @@ void init_vulkan() {
   push_create(create_render_pass, destroy_render_pass);
   push_create(create_shader_modules, destroy_shader_modules);
   push_create(create_vertex_buffer, destroy_vertex_buffer);
+  push_create(create_index_buffer, destroy_index_buffer);
   push_create(create_uniform_buffer, destroy_uniform_buffer);
   push_create(create_texture, destroy_texture);
   push_create(create_layouts, destroy_layouts);
